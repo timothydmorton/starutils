@@ -4,7 +4,6 @@ from orbitutils import OrbitPopulation
 from plotutils import setfig,plot2dhist
 
 from .constraints import ConstraintDict,MeasurementConstraint,RangeConstraint
-from .utils import plot2dhist
 
 class StarPopulation(object):
     def __init__(self,stars):
