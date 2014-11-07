@@ -1,22 +1,30 @@
 from __future__ import print_function, division
 
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+import logging
+
 from orbitutils import OrbitPopulation
 from plotutils import setfig,plot2dhist
 
+from .constraints import Constraint
 from .constraints import ConstraintDict,MeasurementConstraint,RangeConstraint
 
 class StarPopulation(object):
-    def __init__(self,stars):
+    def __init__(self,stars,name=''):
         """A population of stars.  Initialized with no constraints.
 
-        stars : ``pandas`` ``DataFrame`` object
-            Properties of stars.  Any magnitude properties
-            should end with '_mag'
+        data : ``pandas`` ``DataFrame`` object
+            Data table containing properties of stars.
+            Magnitude properties end with "_mag".
 
-        kwargs :
-            Keyword arguments set as attributes.
+        orbpop : ``OrbitPopulation`` object
+
         """
         self.stars = stars
+        self.name = name
+        
 
         #initialize empty constraint list
         self.constraints = ConstraintDict()
@@ -26,6 +34,7 @@ class StarPopulation(object):
 
         #apply constraints,  initializing the following attributes:
         # self.distok, self.countok, self.selected, self.selectfrac
+        
         self._apply_all_constraints()
 
 
@@ -90,19 +99,19 @@ class StarPopulation(object):
         """
         if inds is None:
             if selected:
-                inds = arange(len(self.selected))
+                inds = np.arange(len(self.selected))
             else:
-                inds = arange(len(self.stars))
+                inds = np.arange(len(self.stars))
         if selected:
-            xvals = self[propx][inds]
-            yvals = self[propy][inds]
+            xvals = self[propx].iloc[inds]
+            yvals = self[propy].iloc[inds]
         else:
-            xvals = self.stars[propx][inds]
-            yvals = self.stars[propy][inds]
+            xvals = self.stars[propx].iloc[inds]
+            yvals = self.stars[propy].iloc[inds]
         if logx:
-            xvals = log10(xvals)
+            xvals = np.log10(xvals)
         if logy:
-            yvals = log10(yvals)
+            yvals = np.log10(yvals)
 
         plot2dhist(xvals,yvals,fig=fig,**kwargs)
         plt.xlabel(propx)
@@ -121,9 +130,9 @@ class StarPopulation(object):
             else:
                 inds = np.arange(len(self.stars))
         if selected:
-            vals = self[prop][inds]
+            vals = self[prop].iloc[inds]
         else:
-            vals = self.stars[prop][inds]
+            vals = self.stars[prop].iloc[inds]
 
         if log:
             h = plt.hist(np.log10(vals),**kwargs)
@@ -180,14 +189,18 @@ class StarPopulation(object):
         return results
 
     
-    def constraint_piechart(self,primarylist=['secondary depth'],
+    def constraint_piechart(self,primarylist=None,
                             fig=None,title='',colordict=None,
                             legend=True,nolabels=False):
         """Makes piechart illustrating constraints on population
+
+        for FPP, primarylist default was ['secondary depth']; remember that
         """
 
         setfig(fig,figsize=(6,6))
         stats = self.constraint_stats(primarylist=primarylist)
+        if primarylist is None:
+            primarylist = []
         if len(primarylist)==1:
             primaryname = primarylist[0]
         else:
@@ -322,8 +335,96 @@ class StarPopulation(object):
                                   selectfrac_skip=selectfrac_skip,
                                   distribution_skip=distribution_skip)
 
+    @property
+    def constraint_df(self):
+        """A ``DataFrame`` representing all constraints, hidden or not
+        """
+        df = pd.DataFrame()
+        for name,c in self.constraints.iteritems():
+            df[name] = c.ok
+        for name,c in self.hidden_constraints.iteritems():
+            df[name] = c.ok
+        return df
 
+    def save_hdf(self,filename,path=''):
+        self.stars.to_hdf(filename,'{}/stars'.format(path))
+        self.constraint_df.to_hdf(filename,'{}/constraints'.format(path))
 
+        store = pd.HDFStore(filename)
+        attrs = store.get_storer('{}/stars'.format(path)).attrs
+        attrs.selectfrac_skip = self.selectfrac_skip
+        attrs.distribution_skip = self.distribution_skip
+        attrs.name = self.name
+        attrs.poptype = type(self)
+        store.close()
+
+class StarPopulation_FromH5(StarPopulation):
+    def __init__(self,filename,path=''):
+        stars = pd.read_hdf(filename,path+'/stars')
+        constraint_df = pd.read_hdf(filename,path+'/constraints')
+        store = pd.HDFStore(filename)
+        attrs = store.get_storer('{}/stars'.format(path)).attrs
+        distribution_skip = attrs.distribution_skip
+        selectfrac_skip = attrs.selectfrac_skip
+        name = attrs.name
+        poptype = attrs.poptype
+        store.close()
+
+        self.poptype = poptype
+        StarPopulation.__init__(self,stars,name)
+
+        for n in constraint_df.columns:
+            mask = np.array(constraint_df[n])
+            c = Constraint(mask,name=n)
+            sel_skip = n in selectfrac_skip
+            dist_skip = n in distribution_skip
+            self.apply_constraint(c,selectfrac_skip=sel_skip,
+                                  distribution_skip=dist_skip)
+
+class BinaryPopulation(StarPopulation):
+    def __init__(self,primary,secondary,orbpop=None,
+                 period=None,ecc=None,name='',**kwargs):
+
+        """A population of binary stars.
+
+        If ``OrbitPopulation`` provided, that will describe the orbits;
+        if not, then orbit population will be generated.
+
+        primary,secondary : ``DataFrame``
+            Properties of primary and secondary stars, respectively.
+            These get merged into new ``stars`` attribute, with "_A"
+            and "_B" tags.
+
+        orbpop : ``OrbitPopulation``, optional
+            Object describing orbits of stars.  If not provided, then ``period``
+            and ``ecc`` keywords must be provided.
+
+        period,ecc : array-like, optional
+            Periods and eccentricities of orbits.  Must be provided if ``orbpop``
+            not passed.
+        """
+        stars = pd.DataFrame()
+        for c in primary.columns:
+            stars['{}_A'.format(c)] = primary[c]
+        for c in secondary.columns:
+            stars['{}_B'.format(c)] = secondary[c]
+        
+        if orbpop is None:
+            self.orbpop = OrbitPopulation(primary['mass'],
+                                          secondary['mass'],
+                                          period,ecc)
+        else:
+            self.orbpop = orbpop
+
+        StarPopulation.__init__(self,stars,name=name)
+
+    @property
+    def Rsky(self):
+        return self.orbpop.Rsky
+
+    @property
+    def RV(self):
+        return self.orbpop.RV
 
 #methods below should be applied to relevant subclasses
 '''
