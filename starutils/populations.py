@@ -5,11 +5,14 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import logging
 
+from astropy import units as u
+
 from orbitutils import OrbitPopulation
 from plotutils import setfig,plot2dhist
 
-from .constraints import Constraint
+from .constraints import Constraint,UpperLimit,LowerLimit,JointConstraintOr
 from .constraints import ConstraintDict,MeasurementConstraint,RangeConstraint
+from .constraints import ContrastCurveConstraint,VelocityContrastCurveConstraint
 
 class StarPopulation(object):
     def __init__(self,stars,name=''):
@@ -335,6 +338,38 @@ class StarPopulation(object):
                                   selectfrac_skip=selectfrac_skip,
                                   distribution_skip=distribution_skip)
 
+    def apply_trend_constraint(self,limit,dt,**kwargs):
+        """Only works if object has dRV method and plong attribute; limit in km/s
+
+        limit : ``Quantity``
+            Radial velocity limit on trend
+
+        dt : ``Quantity``
+            Time baseline of RV observations.
+        """
+        dRVs = np.absolute(self.dRV(dt))
+        c1 = UpperLimit(dRVs, limit)
+        c2 = LowerLimit(self.Plong, dt*4)
+
+        self.apply_constraint(JointConstraintOr(c1,c2,name='RV monitoring',
+                                                Ps=self.Plong,dRVs=dRVs),**kwargs)
+
+    def apply_cc(self,cc,**kwargs):
+        """Only works if object has Rsky, dmag attributes
+        """
+        rs = self.Rsky.to('arcsec').value
+        dmags = self.dmag(cc.band)
+        self.apply_constraint(ContrastCurveConstraint(rs,dmags,cc,name=cc.name),
+                              **kwargs)
+
+    def apply_vcc(self,vcc,**kwargs):
+        """only works if has dmag and RV attributes"""
+        rvs = self.RV.value
+        dmags = self.dmag(vcc.band)
+        self.apply_constraint(VelocityContrastCurveConstraint(rvs,dmags,vcc,
+                                                              name='secondary spectrum'),
+                              **kwargs)
+        
     @property
     def constraint_df(self):
         """A ``DataFrame`` representing all constraints, hidden or not
@@ -360,6 +395,8 @@ class StarPopulation(object):
 
 class StarPopulation_FromH5(StarPopulation):
     def __init__(self,filename,path=''):
+        """Loads in a StarPopulation saved to .h5
+        """
         stars = pd.read_hdf(filename,path+'/stars')
         constraint_df = pd.read_hdf(filename,path+'/constraints')
         store = pd.HDFStore(filename)
@@ -382,8 +419,9 @@ class StarPopulation_FromH5(StarPopulation):
                                   distribution_skip=dist_skip)
 
 class BinaryPopulation(StarPopulation):
-    def __init__(self,primary,secondary,orbpop=None,
-                 period=None,ecc=None,name='',**kwargs):
+    def __init__(self,primary,secondary,distance,
+                 orbpop=None, period=None,
+                 ecc=None,name='',**kwargs):
 
         """A population of binary stars.
 
@@ -394,6 +432,9 @@ class BinaryPopulation(StarPopulation):
             Properties of primary and secondary stars, respectively.
             These get merged into new ``stars`` attribute, with "_A"
             and "_B" tags.
+
+        distance : ``Quantity``
+            Distance of system.
 
         orbpop : ``OrbitPopulation``, optional
             Object describing orbits of stars.  If not provided, then ``period``
@@ -409,6 +450,8 @@ class BinaryPopulation(StarPopulation):
         for c in secondary.columns:
             stars['{}_B'.format(c)] = secondary[c]
         
+        self.distance = distance
+
         if orbpop is None:
             self.orbpop = OrbitPopulation(primary['mass'],
                                           secondary['mass'],
@@ -420,37 +463,27 @@ class BinaryPopulation(StarPopulation):
 
     @property
     def Rsky(self):
-        return self.orbpop.Rsky
+        r = (self.orbpop.Rsky/self.distance)
+        return r.to('arcsec',equivalencies=u.dimensionless_angles())
 
     @property
     def RV(self):
         return self.orbpop.RV
 
+    def dRV(self,dt):
+        return self.orbpop.dRV(dt)
+
+    @property
+    def Plong(self):
+        return self.orbpop.P
+
+    def dmag(self,band):
+        mag2 = self.stars['{}_mag_B'.format(band)]
+        mag1 = self.stars['{}_mag_A'.format(band)]
+        return mag2-mag1
+
 #methods below should be applied to relevant subclasses
 '''
-    def apply_trend_constraint(self,limit,dt):
-        """Only works if object has dRV method and plong attribute; limit in km/s"""
-        dRVs = np.absolute(self.dRV(dt))
-        c1 = UpperLimit(dRVs, limit)
-        c2 = LowerLimit(self.stars.Plong, dt*4)
-
-        self.apply_constraint(JointConstraintOr(c1,c2,name='RV monitoring',Ps=self.stars.Plong,dRVs=dRVs))
-
-    def apply_cc(self,cc):
-        """Only works if object has rsky, dmags attributes
-        """
-        rs = self.rsky
-        dmags = self.dmags(cc.band)
-        self.apply_constraint(ContrastCurveConstraint(rs,dmags,cc,name=cc.name))
-
-    def apply_vcc(self,vcc):
-        """only works if has dmags and RV attributes"""
-        if type(vcc)==type((1,)):
-            vcc = VelocityContrastCurve(*vcc)
-        dmags = self.dmags(vcc.band)
-        rvs = self.RV
-        self.apply_constraint(VelocityContrastCurveConstraint(rvs,dmags,vcc,name='secondary spectrum'))
-        
     def set_dmaglim(self,dmaglim):
         if not (hasattr(self,'blendmag') and hasattr(self,'dmaglim')):
             return
