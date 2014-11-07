@@ -370,6 +370,23 @@ class StarPopulation(object):
                                                               name='secondary spectrum'),
                               **kwargs)
         
+    def set_maxrad(self,maxrad):
+        """Adds a constraint that rejects everything with Rsky > maxrad
+
+        Requires Rsky attribute.
+
+        Parameters
+        ----------
+        maxrad : ``Quantity``
+            The maximum angular value of Rsky.
+        """
+        self.maxrad = maxrad
+        self.apply_constraint(UpperLimit(self.Rsky,maxrad,
+                                         name='Max Rsky'),
+                              overwrite=True)
+        self._apply_all_constraints()
+        
+
     @property
     def constraint_df(self):
         """A ``DataFrame`` representing all constraints, hidden or not
