@@ -7,7 +7,7 @@ import logging
 
 from astropy import units as u
 
-from orbitutils import OrbitPopulation
+from orbitutils import OrbitPopulation,OrbitPopulation_FromH5
 from plotutils import setfig,plot2dhist
 
 from .constraints import Constraint,UpperLimit,LowerLimit,JointConstraintOr
@@ -398,7 +398,9 @@ class StarPopulation(object):
             df[name] = c.ok
         return df
 
-    def save_hdf(self,filename,path=''):
+    def save_hdf(self,filename,path='',properties=None):
+        if properties is None:
+            properties = {}
         self.stars.to_hdf(filename,'{}/stars'.format(path))
         self.constraint_df.to_hdf(filename,'{}/constraints'.format(path))
 
@@ -408,6 +410,7 @@ class StarPopulation(object):
         attrs.distribution_skip = self.distribution_skip
         attrs.name = self.name
         attrs.poptype = type(self)
+        attrs.properties = properties
         store.close()
 
 class StarPopulation_FromH5(StarPopulation):
@@ -467,7 +470,8 @@ class BinaryPopulation(StarPopulation):
         for c in secondary.columns:
             stars['{}_B'.format(c)] = secondary[c]
         
-        self.distance = distance
+        stars['distance'] = distance.to('pc').value
+        #self.distance = distance
 
         if orbpop is None:
             self.orbpop = OrbitPopulation(primary['mass'],
@@ -477,6 +481,17 @@ class BinaryPopulation(StarPopulation):
             self.orbpop = orbpop
 
         StarPopulation.__init__(self,stars,name=name)
+
+    @property
+    def distance(self):
+        return np.array(self.stars['distance'])*u.pc
+        
+    @distance.setter
+    def distance(self,value):
+        """value must be a ``Quantity`` object
+        """
+        self.stars['distance'] = value.to('pc').value
+        logging.warning('Setting the distance manually may have screwed up your constraints.  Re-apply constraints as necessary.')
 
     @property
     def Rsky(self):
@@ -498,6 +513,55 @@ class BinaryPopulation(StarPopulation):
         mag2 = self.stars['{}_mag_B'.format(band)]
         mag1 = self.stars['{}_mag_A'.format(band)]
         return mag2-mag1
+
+    def save_hdf(self,filename,path=''):
+        self.orbpop.save_hdf(filename,path='{}/orbpop'.format(path))
+        StarPopulation.save_hdf(self,filename,path=path)
+
+class BinaryPopulation_FromH5(BinaryPopulation,StarPopulation_FromH5):
+    def __init__(self,filename,path=''):
+        """Loads in a BinaryPopulation saved to .h5
+        """
+        StarPopulation_FromH5.__init__(self,filename,path=path)
+        self.orbpop = OrbitPopulation_FromH5(filename,path='{}/orbpop'.format(path))
+
+class BGStarPopulation(StarPopulation):
+    def __init__(self,stars,mags=None,maxrad=1800,density=None):
+        self.mags = mags
+        if density is None:
+            self.density = len(stars)/(3600.**2) #default is for TRILEGAL sims to be 1deg^2
+        else:
+            self.density = density
+        
+        self._maxrad = maxrad #arcsec
+        self._Rsky = randpos_in_circle(len(stars),maxrad,return_rad=True)
+        
+    @property
+    def Rsky(self):
+        return self._Rsky
+
+    @property
+    def maxrad(self):
+        return self._maxrad
+
+    @maxrad.setter
+    def maxrad(self,value):
+        self._Rsky *= value/self._maxrad
+        self._maxrad = value
+        
+    def dmag(self,band):
+        if self.mags is None:
+            raise ValueError('dmag is not defined because primary mags are not defined for this population.')
+        return self.stars['{}_mag'.format(band)] - self.mags[band]
+        
+class BGStarPopulation_FromH5(BGStarPopulation,StarPopulation_FromH5):
+    def __init__(self,filename,path=''):
+        """Loads in a BGStarPopulation saved to .h5
+        """
+        StarPopulation_FromH5.__init__(self,filename,path=path)
+
+
+
 
 #methods below should be applied to relevant subclasses
 '''
