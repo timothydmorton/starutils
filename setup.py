@@ -16,6 +16,7 @@ setup(name = "starutils",
       url = "https://github.com/timothydmorton/starutils",
       packages = find_packages(),
       package_data = {'starutils': ['data/*']},
+      scripts = ['scripts/get_trilegal'],
       classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Science/Research',
