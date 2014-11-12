@@ -14,6 +14,8 @@ from .constraints import Constraint,UpperLimit,LowerLimit,JointConstraintOr
 from .constraints import ConstraintDict,MeasurementConstraint,RangeConstraint
 from .constraints import ContrastCurveConstraint,VelocityContrastCurveConstraint
 
+from .utils import randpos_in_circle
+
 class StarPopulation(object):
     def __init__(self,stars,name=''):
         """A population of stars.  Initialized with no constraints.
