@@ -25,6 +25,7 @@ setup(name = "starutils",
         'Topic :: Scientific/Engineering',
         'Topic :: Scientific/Engineering :: Astronomy'
         ],
-      install_requires=['pandas>=0.13','plotutils','orbitutils'],
+      install_requires=['pandas>=0.13','plotutils','orbitutils',
+                        'simpledist'],
       zip_safe=False
 ) 

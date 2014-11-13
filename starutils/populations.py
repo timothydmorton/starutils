@@ -16,7 +16,7 @@ from .constraints import Constraint,UpperLimit,LowerLimit,JointConstraintOr
 from .constraints import ConstraintDict,MeasurementConstraint,RangeConstraint
 from .constraints import ContrastCurveConstraint,VelocityContrastCurveConstraint
 
-from .utils import randpos_in_circle
+from .utils import randpos_in_circle, draw_raghavan_periods, draw_eccs
 
 from .trilegal import get_trilegal
 
@@ -466,11 +466,15 @@ class BinaryPopulation(StarPopulation):
 
         orbpop : ``OrbitPopulation``, optional
             Object describing orbits of stars.  If not provided, then ``period``
-            and ``ecc`` keywords must be provided.
+            and ``ecc`` keywords must be provided, or else they will be
+            randomly generated (see below).
 
         period,ecc : array-like, optional
-            Periods and eccentricities of orbits.  Must be provided if ``orbpop``
-            not passed.
+            Periods and eccentricities of orbits.  If ``orbpop``
+            not passed, and these are not provided, then periods and eccs 
+            will be randomly generated according
+            to the empirical distributions of the Raghavan (2010) and
+            Multiple Star Catalog distributions (see ``utils`` for details).
         """
         stars = pd.DataFrame()
         for c in primary.columns:
@@ -482,6 +486,10 @@ class BinaryPopulation(StarPopulation):
         #self.distance = distance
 
         if orbpop is None:
+            if period is None:
+                period = draw_raghavan_periods(len(secondary))
+            if ecc is None:
+                ecc = draw_eccs(len(secondary),period)
             self.orbpop = OrbitPopulation(primary['mass'],
                                           secondary['mass'],
                                           period,ecc)

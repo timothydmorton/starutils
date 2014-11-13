@@ -1,4 +1,5 @@
 #!/usr/bin/perl
+# TDM added <use_binaries> input argument; 1 if binaries should be simulated, 0 if no.
 $argc = @ARGV;
 if ($argc<8) {
   die "Usage: get_trilegal <version> <gc_l> <gc_b> <area> <use_binaries> <AV_extinction> <sigmaAV_AV> <Phot.system> <icm_lim> <mag_lim> <outputfile>\n";
