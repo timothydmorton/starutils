@@ -7,6 +7,7 @@ import logging
 
 from astropy import units as u
 from astropy.units import Quantity
+from astropy.coordinates import SkyCoord
 
 from orbitutils import OrbitPopulation,OrbitPopulation_FromH5
 from plotutils import setfig,plot2dhist
@@ -16,6 +17,8 @@ from .constraints import ConstraintDict,MeasurementConstraint,RangeConstraint
 from .constraints import ContrastCurveConstraint,VelocityContrastCurveConstraint
 
 from .utils import randpos_in_circle
+
+from .trilegal import get_trilegal
 
 class StarPopulation(object):
     def __init__(self,stars,name=''):
@@ -376,7 +379,7 @@ class StarPopulation(object):
     def set_maxrad(self,maxrad):
         """Adds a constraint that rejects everything with Rsky > maxrad
 
-        Requires Rsky attribute.
+        Requires Rsky attribute, which should always have units.
 
         Parameters
         ----------
@@ -428,6 +431,8 @@ class StarPopulation_FromH5(StarPopulation):
         selectfrac_skip = attrs.selectfrac_skip
         name = attrs.name
         poptype = attrs.poptype
+        for kw,val in attrs.properties.items():
+            setattr(self,kw,val)
         store.close()
 
         self.poptype = poptype
@@ -534,6 +539,8 @@ class BGStarPopulation(StarPopulation):
         if density is None:
             self.density = len(stars)/((3600.*u.arcsec)**2) #default is for TRILEGAL sims to be 1deg^2
         else:
+            if type(density)!=Quantity:
+                raise ValueError('Provided stellar density must have units.')
             self.density = density
         
         if type(maxrad) != Quantity:
@@ -564,9 +571,11 @@ class BGStarPopulation(StarPopulation):
             raise ValueError('dmag is not defined because primary mags are not defined for this population.')
         return self.stars['{}_mag'.format(band)] - self.mags[band]
         
-    def save_hdf(self,filename,path=''):
-        properties = {'_maxrad':self._maxrad,
-                      'density':self.density}
+    def save_hdf(self,filename,path='',properties=None):
+        if properties is None:
+            properties = {}
+        properties['_maxrad'] = self._maxrad
+        properties['density'] = self.density
         StarPopulation.save_hdf(self,filename,path=path,properties=properties)
 
 class BGStarPopulation_FromH5(BGStarPopulation,StarPopulation_FromH5):
@@ -574,14 +583,40 @@ class BGStarPopulation_FromH5(BGStarPopulation,StarPopulation_FromH5):
         """Loads in a BGStarPopulation saved to .h5
         """
         StarPopulation_FromH5.__init__(self,filename,path=path)
+        #store = pd.HDFStore(filename)
+        #properties = store.get_storer('{}/stars'.format(path)).attrs.properties
+        #self._maxrad = properties['_maxrad']
+        #self.density = properties['density']
+        #store.close()
+
+
+class BGStarPopulation_TRILEGAL(BGStarPopulation):
+    def __init__(self,filename,ra,dec,mags,maxrad=1800,
+                 name='',**kwargs):
+        """Creates TRILEGAL simulation for ra,dec; loads as BGStarPopulation
+
+        keyword arguments passed to ``get_trilegal``
+        """
+        self.ra = ra
+        self.dec = dec
+        try:
+            stars = pd.read_hdf(filename,'df')
+        except:
+            get_trilegal(filename,ra,dec,**kwargs)
+            stars = pd.read_hdf(os.path.join(folder,filename),'df')
         store = pd.HDFStore(filename)
-        properties = store.get_storer('{}/stars'.format(path)).attrs.properties
-        self._maxrad = properties['_maxrad']
-        self.density = properties['density']
+        self.trilegal_args = store.get_storer('df').attrs.trilegal_args
         store.close()
+        area = self.trilegal_args['area']*(u.deg)**2
+        density = len(stars)/area
+        BGStarPopulation.__init__(self,stars,mags=mags,maxrad=maxrad,
+                                  density=density,name=name)
 
-
-
+    def save_hdf(self,filename,path=''):
+        properties = {'trilegal_args':self.trilegal_args,
+                      'ra':self.ra,'dec':self.dec}
+        BGStarPopulation.save_hdf(self,filename,path=path,
+                                  properties=properties)
 
 #methods below should be applied to relevant subclasses
 '''
