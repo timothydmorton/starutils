@@ -6,6 +6,7 @@ import pandas as pd
 import logging
 
 from astropy import units as u
+from astropy.units import Quantity
 
 from orbitutils import OrbitPopulation,OrbitPopulation_FromH5
 from plotutils import setfig,plot2dhist
@@ -528,19 +529,24 @@ class BinaryPopulation_FromH5(BinaryPopulation,StarPopulation_FromH5):
         self.orbpop = OrbitPopulation_FromH5(filename,path='{}/orbpop'.format(path))
 
 class BGStarPopulation(StarPopulation):
-    def __init__(self,stars,mags=None,maxrad=1800,density=None):
+    def __init__(self,stars,mags=None,maxrad=1800,density=None,name=''):
         self.mags = mags
         if density is None:
-            self.density = len(stars)/(3600.**2) #default is for TRILEGAL sims to be 1deg^2
+            self.density = len(stars)/((3600.*u.arcsec)**2) #default is for TRILEGAL sims to be 1deg^2
         else:
             self.density = density
         
-        self._maxrad = maxrad #arcsec
-        self._Rsky = randpos_in_circle(len(stars),maxrad,return_rad=True)
+        if type(maxrad) != Quantity:
+            self._maxrad = maxrad*u.arcsec #arcsec
+        else:
+            self._maxrad = maxrad
+
+        StarPopulation.__init__(self,stars,name=name)
+        self.stars['Rsky'] = randpos_in_circle(len(stars),maxrad,return_rad=True)
         
     @property
     def Rsky(self):
-        return self._Rsky
+        return np.array(self.stars['Rsky'])*u.arcsec
 
     @property
     def maxrad(self):
@@ -548,7 +554,9 @@ class BGStarPopulation(StarPopulation):
 
     @maxrad.setter
     def maxrad(self,value):
-        self._Rsky *= value/self._maxrad
+        if type(value) != Quantity:
+            value = value*u.arcsec
+        self.stars['Rsky'] *= (value/self._maxrad).decompose()
         self._maxrad = value
         
     def dmag(self,band):
@@ -556,11 +564,21 @@ class BGStarPopulation(StarPopulation):
             raise ValueError('dmag is not defined because primary mags are not defined for this population.')
         return self.stars['{}_mag'.format(band)] - self.mags[band]
         
+    def save_hdf(self,filename,path=''):
+        properties = {'_maxrad':self._maxrad,
+                      'density':self.density}
+        StarPopulation.save_hdf(self,filename,path=path,properties=properties)
+
 class BGStarPopulation_FromH5(BGStarPopulation,StarPopulation_FromH5):
     def __init__(self,filename,path=''):
         """Loads in a BGStarPopulation saved to .h5
         """
         StarPopulation_FromH5.__init__(self,filename,path=path)
+        store = pd.HDFStore(filename)
+        properties = store.get_storer('{}/stars'.format(path)).attrs.properties
+        self._maxrad = properties['_maxrad']
+        self.density = properties['density']
+        store.close()
 
 
 
