@@ -88,3 +88,37 @@ def draw_eccs(n,per=10,binsize=0.1,fuzz=0.05,maxecc=0.97):
     es = es * (1 + rand.normal(size=n)*fuzz)
     es[es>maxecc] = maxecc
     return np.absolute(es)
+
+########## other utility functions
+
+import astropy.constants as const
+AU = const.au.cgs.value
+RSUN = const.R_sun.cgs.value
+MSUN = const.M_sun.cgs.value
+DAY = 86400 #seconds
+G = const.G.cgs.value
+
+def rochelobe(q):
+    """returns r1/a; q = M1/M2"""
+    return 0.49*q**(2./3)/(0.6*q**(2./3) + np.log(1+q**(1./3)))
+
+def withinroche(semimajors,M1,R1,M2,R2):
+    q = M1/M2
+    return ((R1+R2)*RSUN) > (rochelobe(q)*semimajors*AU)
+    
+def semimajor(P,mstar=1):
+    """Period in days, mstar in solar masses
+    """
+    return ((P*DAY/2/pi)**2*G*mstar*MSUN)**(1./3)/AU
+
+def period_from_a(a,mstar):
+    return np.sqrt(4*pi**2*(a*AU)**3/(G*mstar*MSUN))/DAY
+
+def addmags(mag1,mag2):
+    F1 = 10**(-0.4*mag1)
+    F2 = 10**(-0.4*mag2)
+    try:
+        F2 = F2[:,newaxis]
+    except:
+        pass
+    return -2.5*log10(F1+F2)
