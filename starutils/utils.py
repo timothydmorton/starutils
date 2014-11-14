@@ -42,6 +42,11 @@ def draw_pers_eccs(n,**kwargs):
     eccs = draw_eccs(n,pers,**kwargs)
     return pers,eccs
 
+def flat_massratio_fn(qmin=0.1,qmax=1.):
+    def fn(n):
+        return rand.uniform(size=n)*(qmax - qmin) + qmin
+    return fn
+
 def draw_raghavan_periods(n):
     logps = RAGHAVAN_LOGPERKDE.resample(n)
     return 10**logps
@@ -89,7 +94,7 @@ def draw_eccs(n,per=10,binsize=0.1,fuzz=0.05,maxecc=0.97):
     es[es>maxecc] = maxecc
     return np.absolute(es)
 
-########## other utility functions
+########## other utility functions; copied from old code
 
 import astropy.constants as const
 AU = const.au.cgs.value

@@ -3,6 +3,7 @@ from __future__ import print_function, division
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import scipy.stats as stats
 import logging
 
 from astropy import units as u
@@ -17,8 +18,16 @@ from .constraints import ConstraintDict,MeasurementConstraint,RangeConstraint
 from .constraints import ContrastCurveConstraint,VelocityContrastCurveConstraint
 
 from .utils import randpos_in_circle, draw_raghavan_periods, draw_eccs
+from .utils import flat_massratio_fn
 
 from .trilegal import get_trilegal
+
+try:
+    from isochrones.dartmouth import Dartmouth_Isochrone
+    DARTMOUTH = Dartmouth_Isochrone()
+except ImportError:
+    logging.warning('isochrones package not implemented; population simulations will not be fully functional')
+    DARTMOUTH = None
 
 class StarPopulation(object):
     def __init__(self,stars,name=''):
@@ -533,6 +542,77 @@ class BinaryPopulation(StarPopulation):
     def save_hdf(self,filename,path=''):
         self.orbpop.save_hdf(filename,path='{}/orbpop'.format(path))
         StarPopulation.save_hdf(self,filename,path=path)
+
+class Simulated_BinaryPopulation(BinaryPopulation):
+    def __init__(self,M,distance,q_fn,P_fn,ecc_fn,n=1e4,ichrone=DARTMOUTH,
+                 age=9.5,feh=0.0, minmass=0.12, name=''):
+        """Simulates BinaryPopulation according to provide primary mass(es), generating functions, and stellar isochrone models.
+
+        Parameters
+        ----------
+        M : float or array-like
+            Primary mass(es).
+
+        distance : ``Quantity``
+            Distance of system.
+
+        q_fn : function
+            Mass ratio generating function. Must return 'n' mass ratios, and be
+            called as follows::
+        
+                qs = q_fn(n)
+
+        P_fn : function
+            Orbital period generating function.  Must return ``n`` orbital periods,
+            and be called as follows::
+            
+                Ps = P_fn(n)
+
+        ecc_fn : function
+            Orbital eccentricity generating function.  Must return ``n`` orbital 
+            eccentricities generated according to provided period(s)::
+
+                eccs = ecc_fn(n,Ps)
+
+        n : int, optional
+            Number of instances to simulate.
+
+        ichrone : ``Isochrone`` object
+            Stellar model object from which to simulate stellar properties.
+
+        age,feh : float or array-like
+            log(age) and metallicity at which to simulate population.
+        """
+        M2 = M * q_fn(n)
+        P = P_fn(n)
+        ecc = ecc_fn(n,P)
+
+
+        pri = ichrone(np.ones(n)*M, age, feh, return_df=True) #array typecast needed b/c of isochrones bug; fix at some point.
+        sec = ichrone(M2, age, feh, return_df=True)
+
+        BinaryPopulation.__init__(self, pri, sec, distance,
+                                  period=P, ecc=ecc, name=name)
+
+class Raghavan_BinaryPopulation(Simulated_BinaryPopulation):
+    def __init__(self,M,distance,e_M=0,n=1e4,ichrone=DARTMOUTH,
+                 age=9.5, feh=0.0, name='', q_fn=None, qmin=0.1,
+                 minmass=0.12):
+        """A Simulated_BinaryPopulation with empirical default distributions.
+        """
+        if q_fn is None:
+            q_fn = flat_massratio_fn(qmin=max(qmin,minmass/M))
+
+        if e_M != 0:
+            M = stats.norm(M,e_M).rvs(n)
+
+        Simulated_BinaryPopulation.__init__(self,M,distance, q_fn,
+                                            draw_raghavan_periods,
+                                            draw_eccs, n=n,
+                                            ichrone=ichrone,
+                                            age=age, feh=feh,
+                                            name=name, minmass=minmass)
+
 
 class BinaryPopulation_FromH5(BinaryPopulation,StarPopulation_FromH5):
     def __init__(self,filename,path=''):
