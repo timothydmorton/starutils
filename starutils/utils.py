@@ -126,4 +126,16 @@ def addmags(mag1,mag2):
         F2 = F2[:,newaxis]
     except:
         pass
-    return -2.5*log10(F1+F2)
+    return -2.5*np.log10(F1+F2)
+
+def dfromdm(dm):
+    if size(dm)>1:
+        dm = np.atleast_1d(dm)
+    return 10**(1+dm/5)
+
+def distancemodulus(d):
+    """d in parsec
+    """
+    if np.size(d)>1:
+        d = np.atleast_1d(d)
+    return 5*np.log10(d/10)
