@@ -139,3 +139,6 @@ def distancemodulus(d):
     if np.size(d)>1:
         d = np.atleast_1d(d)
     return 5*np.log10(d/10)
+
+def fbofm(M):
+    return 0.45 - (0.7-M)/4
