@@ -470,8 +470,8 @@ class BinaryPopulation(StarPopulation):
             These get merged into new ``stars`` attribute, with "_A"
             and "_B" tags.
 
-        distance : ``Quantity``
-            Distance of system.
+        distance : ``Quantity`` or float
+            Distance of system.  If not ``Quantity`` then assumed to be in pc.
 
         orbpop : ``OrbitPopulation``, optional
             Object describing orbits of stars.  If not provided, then ``period``
@@ -490,7 +490,10 @@ class BinaryPopulation(StarPopulation):
             stars['{}_A'.format(c)] = primary[c]
         for c in secondary.columns:
             stars['{}_B'.format(c)] = secondary[c]
-        
+
+        if type(distance) != Quantity:
+            distance = distance * u.pc
+
         stars['distance'] = distance.to('pc').value
         #self.distance = distance
 
@@ -553,8 +556,8 @@ class Simulated_BinaryPopulation(BinaryPopulation):
         M : float or array-like
             Primary mass(es).
 
-        distance : ``Quantity``
-            Distance of system.
+        distance : float or ``Quantity``
+            Distance of system.  If not ``Quantity`` then assumed to be in pc.
 
         q_fn : function
             Mass ratio generating function. Must return 'n' mass ratios, and be
@@ -599,6 +602,44 @@ class Raghavan_BinaryPopulation(Simulated_BinaryPopulation):
                  age=9.5, feh=0.0, name='', q_fn=None, qmin=0.1,
                  minmass=0.12):
         """A Simulated_BinaryPopulation with empirical default distributions.
+
+        Default mass ratio distribution is flat down to chosen minimum mass,
+        default period distribution is from Raghavan (2010), default
+        eccentricity/period relation comes from data from the Multiple Star
+        Catalog (Tokovinin, xxxx).
+
+        Parameters
+        ----------
+        M : float or array-like
+            Primary mass(es) in solar masses.
+
+        distance : ``Quantity`` or float (or array-like)
+            Distance to system.  If not Quantity, then assumed to be pc.
+
+        e_M : float, optional
+            1-sigma uncertainty in primary mass.
+
+        n : int
+            Number of simulated instances to create.
+
+        ichrone : ``Isochrone`` object
+            Stellar models from which to generate binary companions.
+
+        age,feh : float or array-like
+            Age and metallicity of system.
+
+        name : str
+            Name of population.
+
+        q_fn : function
+            A function that returns random mass ratios.  Defaults to flat
+            down to provided minimum mass.  Must be called as follows::
+            
+                qs = q_fn(n)
+
+            to provide ``n`` random mass ratios.
+
+
         """
         if q_fn is None:
             q_fn = flat_massratio_fn(qmin=max(qmin,minmass/M))
