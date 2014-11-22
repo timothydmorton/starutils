@@ -7,8 +7,18 @@ def readme():
     with open('README.rst') as f:
         return f.read()
 
+# Hackishly inject a constant into builtins to enable importing of the
+# package before the library is built.
+import sys
+if sys.version_info[0] < 3:
+    import __builtin__ as builtins
+else:
+    import builtins
+builtins.__STARUTILS_SETUP__ = True
+import starutils
+
 setup(name = "starutils",
-      version = "0.1",
+      version = starutils.__version__,
       description = "Useful things for playing with simulated star populations.",
       long_description = readme(),
       author = "Timothy D. Morton",
@@ -26,6 +36,6 @@ setup(name = "starutils",
         'Topic :: Scientific/Engineering :: Astronomy'
         ],
       install_requires=['pandas>=0.13','plotutils','orbitutils',
-                        'simpledist'],
+                        'simpledist','isochrones'],
       zip_safe=False
 ) 

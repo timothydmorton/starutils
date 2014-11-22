@@ -13,12 +13,15 @@ from astropy.coordinates import SkyCoord
 from orbitutils import OrbitPopulation,OrbitPopulation_FromH5
 from plotutils import setfig,plot2dhist
 
+from simpledist import distributions as dists
+
 from .constraints import Constraint,UpperLimit,LowerLimit,JointConstraintOr
 from .constraints import ConstraintDict,MeasurementConstraint,RangeConstraint
 from .constraints import ContrastCurveConstraint,VelocityContrastCurveConstraint
 
 from .utils import randpos_in_circle, draw_raghavan_periods, draw_eccs
 from .utils import flat_massratio_fn
+from .utils import distancemodulus
 
 from .trilegal import get_trilegal
 
@@ -26,7 +29,7 @@ try:
     from isochrones.dartmouth import Dartmouth_Isochrone
     DARTMOUTH = Dartmouth_Isochrone()
 except ImportError:
-    logging.warning('isochrones package not implemented; population simulations will not be fully functional')
+    logging.warning('isochrones package not installed; population simulations will not be fully functional')
     DARTMOUTH = None
 
 class StarPopulation(object):
@@ -513,13 +516,17 @@ class BinaryPopulation(StarPopulation):
     @property
     def distance(self):
         return np.array(self.stars['distance'])*u.pc
-        
+
     @distance.setter
     def distance(self,value):
         """value must be a ``Quantity`` object
         """
         self.stars['distance'] = value.to('pc').value
         logging.warning('Setting the distance manually may have screwed up your constraints.  Re-apply constraints as necessary.')
+
+    @property
+    def distmod(self):
+        return distancemodulus(self.stars['distance'])
 
     @property
     def Rsky(self):
@@ -541,6 +548,20 @@ class BinaryPopulation(StarPopulation):
         mag2 = self.stars['{}_mag_B'.format(band)]
         mag1 = self.stars['{}_mag_A'.format(band)]
         return mag2-mag1
+
+    def rsky_distribution(self,rmax=None,dr=0.005,smooth=0.1,nbins=100):
+        if rmax is None:
+            if hasattr(self,'maxrad'):
+                rmax = self.maxrad
+            else:
+                rmax = np.percentile(self.Rsky,99)
+        rs = np.arange(0,rmax,dr)
+        dist = dists.Hist_Distribution(self.Rsky.value,bins=nbins,maxval=rmax,smooth=smooth)
+        return dist
+
+    def rsky_lhood(self,rsky,**kwargs):
+        dist = self.rsky_distribution(**kwargs)
+        return dist(rsky)
 
     def save_hdf(self,filename,path=''):
         self.orbpop.save_hdf(filename,path='{}/orbpop'.format(path))
@@ -746,6 +767,8 @@ class BGStarPopulation_TRILEGAL(BGStarPopulation):
                       'ra':self.ra,'dec':self.dec}
         BGStarPopulation.save_hdf(self,filename,path=path,
                                   properties=properties)
+
+
 
 #methods below should be applied to relevant subclasses
 '''
