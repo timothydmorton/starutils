@@ -6,6 +6,7 @@ import pandas as pd
 import scipy.stats as stats
 import logging
 import re
+import numpy.random as rand
 
 from astropy import units as u
 from astropy.units import Quantity
@@ -478,6 +479,8 @@ class BinaryPopulation(StarPopulation):
         If ``OrbitPopulation`` provided, that will describe the orbits;
         if not, then orbit population will be generated.
 
+        Parameters
+        ----------
         primary,secondary : ``DataFrame``
             Properties of primary and secondary stars, respectively.
             These get merged into new ``stars`` attribute, with "_A"
@@ -506,7 +509,7 @@ class BinaryPopulation(StarPopulation):
 
         for c in primary.columns:
             if re.search('_mag',c):
-                stars['{}_tot'.format(c)] = addmags(primary[c],secondary[c])
+                stars[c] = addmags(primary[c],secondary[c])
             stars['{}_A'.format(c)] = primary[c]
         for c in secondary.columns:
             stars['{}_B'.format(c)] = secondary[c]
@@ -593,6 +596,66 @@ class BinaryPopulation(StarPopulation):
     def save_hdf(self,filename,path=''):
         self.orbpop.save_hdf(filename,path='{}/orbpop'.format(path))
         StarPopulation.save_hdf(self,filename,path=path)
+
+class VolumeLimitedPopulation(BinaryPopulation):
+    def __init__(self, m1, dmax, n=1e5, binary_fraction=0.4,
+                 minmass=0.11, ichrone=DARTMOUTH,
+                 age=9.7, feh=0.0, **kwargs): 
+        """A volume limited sample of stars
+
+        Parameters
+        ----------
+        
+        m1 : array_like
+            Primary masses
+
+        dmax : ``Quantity`` or float
+            Maximum distance of sample.
+
+        n : integer, optional
+            Size of population
+
+        binary_fraction : float
+            Fraction of stars that should be binary.
+
+        """
+
+        qmin = minmass/m1
+        q = rand.random(n)*(1-qmin) + qmin
+        m2 = m1*q
+        
+        primaries = ichrone(m1,age,feh)
+        secondaries = ichrone(m2,age,feh)
+        
+        ubin = rand.random(n)
+        is_single = ubin > binary_fraction
+        for c in secondaries.columns:
+            if re.search('_mag',c):
+                secondaries[c][is_single] = np.inf
+            else:
+                secondaries[c][is_single] = np.nan
+
+        #generate random distances
+        distance_distribution = dists.PowerLaw_Distribution(2.,1,dmax) # p(d)~d^2
+        distances = distance_distribution.rvs(n)
+
+        BinaryPopulation.__init__(self,primaries,secondaries,distances,**kwargs)
+
+        self.stars['is_binary'] = ~is_single
+
+    @property
+    def singles(self):
+        return self.stars.query('not is_binary')
+
+    @property
+    def binaries(self):
+        return self.stars.query('is_binary')
+
+
+    def binary_fraction(self,query='is_binary or not is_binary'):
+        subdf = self.stars.query(query)
+        return subdf['is_binary'].sum()/len(subdf)
+
 
 class Simulated_BinaryPopulation(BinaryPopulation):
     def __init__(self,M,distance,q_fn,P_fn,ecc_fn,n=1e4,ichrone=DARTMOUTH,
