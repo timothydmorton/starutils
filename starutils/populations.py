@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import scipy.stats as stats
 import logging
+import re
 
 from astropy import units as u
 from astropy.units import Quantity
@@ -21,7 +22,7 @@ from .constraints import ContrastCurveConstraint,VelocityContrastCurveConstraint
 
 from .utils import randpos_in_circle, draw_raghavan_periods, draw_eccs
 from .utils import flat_massratio_fn
-from .utils import distancemodulus
+from .utils import distancemodulus, addmags
 
 from .trilegal import get_trilegal
 
@@ -33,19 +34,28 @@ except ImportError:
     DARTMOUTH = None
 
 class StarPopulation(object):
-    def __init__(self,stars,name=''):
+    def __init__(self,stars,distances=None,name=''):
         """A population of stars.  Initialized with no constraints.
 
-        data : ``pandas`` ``DataFrame`` object
+        stars : ``pandas`` ``DataFrame`` object
             Data table containing properties of stars.
             Magnitude properties end with "_mag".
 
-        orbpop : ``OrbitPopulation`` object
+        distances : ``Quantity`` or ``None``
+            If not ``None``, then stars are assumed to have absolute magnitudes,
+            and are then converted to apparent magnitudes
 
         """
-        self.stars = stars
+        self.stars = stars.copy()
         self.name = name
-        
+
+        if distances is not None:
+            distmods = distancemodulus(distances)
+            for col in self.stars.columns:
+                if re.search('_mag',col):
+                    self.stars[col] += distmods
+            self.stars['distance'] = distances
+
 
         #initialize empty constraint list
         self.constraints = ConstraintDict()
@@ -460,7 +470,7 @@ class StarPopulation_FromH5(StarPopulation):
 
 class BinaryPopulation(StarPopulation):
     def __init__(self,primary,secondary,distance,
-                 orbpop=None, period=None,
+                 absmags=False, orbpop=None, period=None,
                  ecc=None,name='',**kwargs):
 
         """A population of binary stars.
@@ -476,6 +486,10 @@ class BinaryPopulation(StarPopulation):
         distance : ``Quantity`` or float
             Distance of system.  If not ``Quantity`` then assumed to be in pc.
 
+        absmags : bool
+            If ``False``, then the mags in primary and secondary get converted 
+            from absolute to apparent magnitudes.
+
         orbpop : ``OrbitPopulation``, optional
             Object describing orbits of stars.  If not provided, then ``period``
             and ``ecc`` keywords must be provided, or else they will be
@@ -489,16 +503,29 @@ class BinaryPopulation(StarPopulation):
             Multiple Star Catalog distributions (see ``utils`` for details).
         """
         stars = pd.DataFrame()
+
         for c in primary.columns:
+            if re.search('_mag',c):
+                stars['{}_tot'.format(c)] = addmags(primary[c],secondary[c])
             stars['{}_A'.format(c)] = primary[c]
         for c in secondary.columns:
             stars['{}_B'.format(c)] = secondary[c]
+
+        stars['q'] = stars['mass_B']/stars['mass_A']
 
         if type(distance) != Quantity:
             distance = distance * u.pc
 
         stars['distance'] = distance.to('pc').value
+        distmods = distancemodulus(stars['distance'])
+        stars['distmod'] = distmods
         #self.distance = distance
+
+        if not absmags:
+            for col in stars.columns:
+                if re.search('_mag',col):
+                    stars[col] += distmods
+
 
         if orbpop is None:
             if period is None:
