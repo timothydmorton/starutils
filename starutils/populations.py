@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import scipy.stats as stats
 import logging
-import re
+import re, os, os.path
 import numpy.random as rand
 
 from astropy import units as u
@@ -24,7 +24,7 @@ from .constraints import ContrastCurveConstraint,VelocityContrastCurveConstraint
 
 from .utils import randpos_in_circle, draw_raghavan_periods, draw_msc_periods, draw_eccs
 from .utils import flat_massratio_fn
-from .utils import distancemodulus, addmags
+from .utils import distancemodulus, addmags, dfromdm
 
 from .trilegal import get_trilegal
 
@@ -36,28 +36,73 @@ except ImportError:
     DARTMOUTH = None
 
 class StarPopulation(object):
-    def __init__(self,stars,distances=None,name=''):
+    def __init__(self,stars,distance=None,
+                 max_distance=1000*u.pc,convert_absmags=True,
+                 name=''):
         """A population of stars.  Initialized with no constraints.
 
         stars : ``pandas`` ``DataFrame`` object
             Data table containing properties of stars.
-            Magnitude properties end with "_mag".
+            Magnitude properties end with "_mag".  Default
+            is that these magnitudes are absolute, and get 
+            converted to apparent magnitudes based on distance,
+            which is either provided or randomly assigned.
 
-        distances : ``Quantity`` or ``None``
-            If not ``None``, then stars are assumed to have absolute magnitudes,
-            and are then converted to apparent magnitudes
+        distance : ``Quantity`` or float, optional
+            If not ``None``, then distances of stars are assigned
+            randomly out to max_distance.  If float,
+            then assumed to be in parsec.  Or, if stars already 
+            has a distance column, this is ignored.
+
+        max_distance : ``Quantity`` or float, optional
+            Max distance out to which distances will be simulated,
+            according to random placements in volume ($p(d)\simd^2$).  
+            Ignored if stars already has a distance column.
+
+        convert_absmags : bool
+            If ``True``, then magnitudes in ``stars`` will be converted
+            to apparent magnitudes based on distance.  If ``False,``
+            then magnitudes will be kept as-is.  Ignored if stars already
+            has a distance column.
 
         """
         self.stars = stars.copy()
         self.name = name
 
-        if distances is not None:
-            distmods = distancemodulus(distances)
-            for col in self.stars.columns:
-                if re.search('_mag',col):
-                    self.stars[col] += distmods
-            self.stars['distance'] = distances
+        N = len(self.stars)
 
+        #if stars does not have a 'distance' column already, then
+        # we define distances based on the provided arguments,
+        # and covert absolute magnitudes into apparent (unless explicitly
+        # forbidden from doing so by 'convert_absmags' being set
+        # to False).
+        
+        if 'distance' not in self.stars:
+            if type(max_distance) != Quantity:
+                max_distance = max_distance * u.pc
+
+
+            if distance is None:
+                #generate random distances
+                dmax = max_distance.to('pc').value
+                distance_distribution = dists.PowerLaw_Distribution(2.,1,dmax) # p(d)~d^2
+                distance = distance_distribution.rvs(N)
+
+            if type(distance) != Quantity:
+                distance = distance * u.pc
+
+            distmods = distancemodulus(distance)
+            if convert_absmags:
+                for col in self.stars.columns:
+                    if re.search('_mag',col):
+                        self.stars[col] += distmods
+
+            self.stars['distance'] = distance
+            self.stars['distmod'] = distmods
+
+
+        if 'distmod' not in self.stars:
+            self.stars['distmod'] = distancemodulus(self.stars['distance'])
 
         #initialize empty constraint list
         self.constraints = ConstraintDict()
@@ -73,6 +118,34 @@ class StarPopulation(object):
 
     def __getitem__(self,prop):
         return self.selected[prop]
+
+    @property
+    def magnitudes(self):
+        bands = []
+        for c in self.stars.columns:
+            if re.search('_mag',c):
+                bands.append(c)
+        return bands
+
+    @property
+    def distance(self):
+        return np.array(self.stars['distance'])*u.pc
+
+    @distance.setter
+    def distance(self,value):
+        """value must be a ``Quantity`` object
+        """
+        self.stars['distance'] = value.to('pc').value
+
+        old_distmod = self.stars['distmod'].copy()
+        new_distmod = distancemodulus(self.stars['distance'])
+
+        for m in self.magnitudes:
+            self.stars[m] += new_distmod - old_distmod
+
+        self.stars['distmod'] = new_distmod
+
+        logging.warning('Setting the distance manually may have screwed up your constraints.  Re-apply constraints as necessary.')
 
 
     def _apply_all_constraints(self):
@@ -471,9 +544,9 @@ class StarPopulation_FromH5(StarPopulation):
                                   distribution_skip=dist_skip)
 
 class BinaryPopulation(StarPopulation):
-    def __init__(self,primary,secondary,distance,
-                 absmags=False, orbpop=None, period=None,
-                 ecc=None,name='',**kwargs):
+    def __init__(self,primary,secondary,
+                 orbpop=None, period=None,
+                 ecc=None,**kwargs):
 
         """A population of binary stars.
 
@@ -486,13 +559,6 @@ class BinaryPopulation(StarPopulation):
             Properties of primary and secondary stars, respectively.
             These get merged into new ``stars`` attribute, with "_A"
             and "_B" tags.
-
-        distance : ``Quantity`` or float
-            Distance to [each] system.  If not ``Quantity`` then assumed to be in pc.
-
-        absmags : bool
-            If ``False``, then the mags in primary and secondary get converted 
-            from absolute to apparent magnitudes, using provided distance.
 
         orbpop : ``OrbitPopulation``, optional
             Object describing orbits of stars.  If not provided, then ``period``
@@ -519,18 +585,6 @@ class BinaryPopulation(StarPopulation):
 
         stars['q'] = stars['mass_B']/stars['mass_A']
 
-        if type(distance) != Quantity:
-            distance = distance * u.pc
-
-        stars['distance'] = distance.to('pc').value
-        distmods = distancemodulus(stars['distance'])
-        stars['distmod'] = distmods
-
-        if not absmags:
-            for col in stars.columns:
-                if re.search('_mag',col):
-                    stars[col] += distmods
-
 
         if orbpop is None:
             if period is None:
@@ -543,22 +597,8 @@ class BinaryPopulation(StarPopulation):
         else:
             self.orbpop = orbpop
 
-        StarPopulation.__init__(self,stars,name=name)
+        StarPopulation.__init__(self,stars,**kwargs)
 
-    @property
-    def distance(self):
-        return np.array(self.stars['distance'])*u.pc
-
-    @distance.setter
-    def distance(self,value):
-        """value must be a ``Quantity`` object
-        """
-        self.stars['distance'] = value.to('pc').value
-        logging.warning('Setting the distance manually may have screwed up your constraints.  Re-apply constraints as necessary.')
-
-    @property
-    def distmod(self):
-        return distancemodulus(self.stars['distance'])
 
     @property
     def Rsky(self):
@@ -658,25 +698,16 @@ class VolumeLimitedPopulation(BinaryPopulation):
         subdf = self.stars.query(query)
         return subdf['is_binary'].sum()/len(subdf)
 
-class VolumeLimitedPopulation_FromH5(VolumeLimitedPopulation,BinaryPopulation_FromH5):
-    def __init__(self,filename,path=''):
-        """Loads in a VolumeLimitedPopulation saved to .h5
-        """
-        BinaryPopulation_FromH5.__init__(self,filename,path=path)
-
 
 class Simulated_BinaryPopulation(BinaryPopulation):
-    def __init__(self,M,distance,q_fn,P_fn,ecc_fn,n=1e4,ichrone=DARTMOUTH,
-                 age=9.5,feh=0.0, minmass=0.12, name=''):
+    def __init__(self,M,q_fn,P_fn,ecc_fn,n=1e4,ichrone=DARTMOUTH,
+                 age=9.5,feh=0.0, minmass=0.12, **kwargs):
         """Simulates BinaryPopulation according to provide primary mass(es), generating functions, and stellar isochrone models.
 
         Parameters
         ----------
         M : float or array-like
             Primary mass(es).
-
-        distance : float or ``Quantity``
-            Distance of system.  If not ``Quantity`` then assumed to be in pc.
 
         q_fn : function
             Mass ratio generating function. Must return 'n' mass ratios, and be
@@ -713,13 +744,13 @@ class Simulated_BinaryPopulation(BinaryPopulation):
         pri = ichrone(np.ones(n)*M, age, feh, return_df=True) #array typecast needed b/c of isochrones bug; fix at some point.
         sec = ichrone(M2, age, feh, return_df=True)
 
-        BinaryPopulation.__init__(self, pri, sec, distance,
-                                  period=P, ecc=ecc, name=name)
+        BinaryPopulation.__init__(self, pri, sec,
+                                  period=P, ecc=ecc, **kwargs)
 
 class Raghavan_BinaryPopulation(Simulated_BinaryPopulation):
-    def __init__(self,M,distance,e_M=0,n=1e4,ichrone=DARTMOUTH,
-                 age=9.5, feh=0.0, name='', q_fn=None, qmin=0.1,
-                 minmass=0.12):
+    def __init__(self,M,e_M=0,n=1e4,ichrone=DARTMOUTH,
+                 age=9.5, feh=0.0, q_fn=None, qmin=0.1,
+                 minmass=0.12, **kwargs):
         """A Simulated_BinaryPopulation with empirical default distributions.
 
         Default mass ratio distribution is flat down to chosen minimum mass,
@@ -731,9 +762,6 @@ class Raghavan_BinaryPopulation(Simulated_BinaryPopulation):
         ----------
         M : float or array-like
             Primary mass(es) in solar masses.
-
-        distance : ``Quantity`` or float (or array-like)
-            Distance to system.  If not Quantity, then assumed to be pc.
 
         e_M : float, optional
             1-sigma uncertainty in primary mass.
@@ -766,12 +794,12 @@ class Raghavan_BinaryPopulation(Simulated_BinaryPopulation):
         if e_M != 0:
             M = stats.norm(M,e_M).rvs(n)
 
-        Simulated_BinaryPopulation.__init__(self,M,distance, q_fn,
+        Simulated_BinaryPopulation.__init__(self,M, q_fn,
                                             draw_raghavan_periods,
                                             draw_eccs, n=n,
                                             ichrone=ichrone,
                                             age=age, feh=feh,
-                                            name=name, minmass=minmass)
+                                            minmass=minmass, **kwargs)
 
 
 class BinaryPopulation_FromH5(BinaryPopulation,StarPopulation_FromH5):
@@ -781,24 +809,32 @@ class BinaryPopulation_FromH5(BinaryPopulation,StarPopulation_FromH5):
         StarPopulation_FromH5.__init__(self,filename,path=path)
         self.orbpop = OrbitPopulation_FromH5(filename,path='{}/orbpop'.format(path))
 
+class VolumeLimitedPopulation_FromH5(VolumeLimitedPopulation,BinaryPopulation_FromH5):
+    def __init__(self,filename,path=''):
+        """Loads in a VolumeLimitedPopulation saved to .h5
+        """
+        BinaryPopulation_FromH5.__init__(self,filename,path=path)
+
+
 
 class TriplePopulation(StarPopulation):
-    def __init__(self, primary, secondary, tertiary, distance, 
-                 orbpop=None, tertiary_with_A=None, absmags=False,
+    def __init__(self, primary, secondary, tertiary, 
+                 orbpop=None, absmags=False,
                  period_short=None, period_long=None,
                  ecc_short=None, ecc_long=None,
-                 name='', **kwargs):
-        """A population of triple stars
+                 **kwargs):
+        """A population of triple stars.
 
+        Primary orbits (secondary + tertiary) in a long orbit;
+        secondary and tertiary orbit each other with a shorter orbit.
+
+        
         Parameters
         ----------
         primary, secondary, tertiary : ``pandas.DataFrame`` objects
             Properties of primary, secondary, and tertiary stars.
             These will get merged into a new ``stars`` attribute,
             with "_A", "_B", and "_C" tags.
-
-        distance : ``Quantity`` or float
-            Distance to [each] system.
 
         absmags : bool
             If ``False``, then the mags in primary and secondary get converted 
@@ -809,12 +845,6 @@ class TriplePopulation(StarPopulation):
             and eccentricity keywords must be provided, or else they will be
             randomly generated (see below).
 
-        tertiary_with_A : array_like, bool
-            Array of boolean values; where ``True``, then the tertiary (star C) is in a 
-            close orbit with star A; where ``False``, it is with star B.  If not
-            provided, assignments will be made randomly.
-
-            
         period_short, period_long, ecc_short, ecc_long : array-like, optional
             Orbital periods and eccentricities of short and long-period orbits. 
             "Short" describes the close pair of the hierarchical system; "long"
@@ -837,24 +867,17 @@ class TriplePopulation(StarPopulation):
         for c in tertiary.columns:
             stars['{}_C'.format(c)] = tertiary[c]
                
-        #assign star C to either A or B.
-        if tertiary_with_A is None:
-            r = rand.random(N)
-            tertiary_with_A = r < 0.5
-        stars['C_orbits'] = 'B'
-        stars['C_orbits'][tertiary_with_A] = 'A'
 
-        if type(distance) != Quantity:
-            distance = distance * u.pc
+        ##For orbit population, stars 2 and 3 are in short orbit, and star 1 in long.
+        ## So we need to define the proper mapping from A,B,C to 1,2,3.
+        ## If C is with A, then A=2, C=3, B=1
+        ## If C is with B, then A=1, B=2, C=3
 
-        stars['distance'] = distance.to('pc').value
-        distmods = distancemodulus(stars['distance'])
-        stars['distmod'] = distmods
-
-        if not absmags:
-            for col in stars.columns:
-                if re.search('_mag',col):
-                    stars[col] += distmods
+        #CwA = stars['C_orbits']=='A'
+        #CwB = stars['C_orbits']=='B'
+        #stars['orbpop_number_A'] = np.ones(N)*(CwA*2 + CwB*1)
+        #stars['orbpop_number_B'] = np.ones(N)*(CwA*1 + CwB*2)
+        #stars['orbpop_number_C'] = np.ones(N)*3
 
         if orbpop is None:
             if period_long is None or period_short is None:
@@ -867,16 +890,9 @@ class TriplePopulation(StarPopulation):
                 ecc_short = draw_eccs(N,period_short)
                 ecc_long = draw_eccs(N,period_long),
             
-            #For orbit population, stars 2 and 3 are in short orbit, and star 1 in long.
-            # So we need to define the proper mapping from A,B,C to 1,2,3.
-            # If C is with A, then A=2, C=3, B=1
-            # If C is with B, then A=1, B=2, C=3
-
-            CwA = stars['C_orbits']=='A'
-            CwB = stars['C_orbits']=='B'
-            M1 = stars['mass_B']*CwA + stars['mass_A']*CwB
-            M2 = stars['mass_A']*CwA + stars['mass_B']*CwA
-            M3 = stars['mass_C']
+                M1 = stars['mass_A']
+                M2 = stars['mass_B']
+                M3 = stars['mass_C']
 
             self.orbpop = TripleOrbitPopulation(M1,M2,M3,period_long,period_short,
                                                 ecclong=ecc_long, eccshort=ecc_short)
@@ -888,7 +904,19 @@ class TriplePopulation(StarPopulation):
 
 class BGStarPopulation(StarPopulation):
     def __init__(self,stars,mags=None,maxrad=1800,density=None,name=''):
+        """Background star population
+
+        Parameters
+        ----------
+        stars : ``pandas.DataFrame``
+            Properties of stars.  Must have 'distance' column defined.
+
+        """
+        if 'distance' not in stars:
+            raise ValueError('Stars must have distance column defined')
+
         self.mags = mags
+
         if density is None:
             self.density = len(stars)/((3600.*u.arcsec)**2) #default is for TRILEGAL sims to be 1deg^2
         else:
@@ -944,7 +972,7 @@ class BGStarPopulation_FromH5(BGStarPopulation,StarPopulation_FromH5):
 
 
 class BGStarPopulation_TRILEGAL(BGStarPopulation):
-    def __init__(self,filename,ra,dec,mags,maxrad=1800,
+    def __init__(self,filename,ra,dec,mags=None,maxrad=1800,
                  name='',**kwargs):
         """Creates TRILEGAL simulation for ra,dec; loads as BGStarPopulation
 
@@ -962,6 +990,10 @@ class BGStarPopulation_TRILEGAL(BGStarPopulation):
         store.close()
         area = self.trilegal_args['area']*(u.deg)**2
         density = len(stars)/area
+
+        stars['distmod'] = stars['m-M0']
+        stars['distance'] = dfromdm(stars['distmod']) 
+
         BGStarPopulation.__init__(self,stars,mags=mags,maxrad=maxrad,
                                   density=density,name=name)
 

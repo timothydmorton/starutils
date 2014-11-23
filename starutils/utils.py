@@ -8,6 +8,8 @@ import numpy.random as rand
 
 from simpledist.distributions import KDE_Distribution
 
+from astropy.units import Quantity
+
 DATAFOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), 'data'))
 
 RAGHAVAN_PERS = np.recfromtxt('{}/raghavan_periods.dat'.format(DATAFOLDER))
@@ -127,7 +129,7 @@ def addmags(*mags):
     tot=0
     for mag in mags:
         tot += 10**(-0.4*mag)
-    return -2.5*log10(tot)
+    return -2.5*np.log10(tot)
 
 def dfromdm(dm):
     if size(dm)>1:
@@ -137,9 +139,14 @@ def dfromdm(dm):
 def distancemodulus(d):
     """d in parsec
     """
-    if np.size(d)>1:
-        d = np.atleast_1d(d)
-    return 5*np.log10(d/10)
+    if type(d)==Quantity:
+        x = d.to('pc').value
+    else:
+        x = d #assumed to be pc
+
+    if np.size(x)>1:
+        d = np.atleast_1d(x)
+    return 5*np.log10(x/10)
 
 def fbofm(M):
     return 0.45 - (0.7-M)/4
