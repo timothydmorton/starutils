@@ -822,7 +822,7 @@ class TriplePopulation(StarPopulation):
     def __init__(self, primary, secondary, tertiary, 
                  orbpop=None, absmags=False,
                  period_short=None, period_long=None,
-                 ecc_short=None, ecc_long=None,
+                 ecc_short=0, ecc_long=0,
                  **kwargs):
         """A population of triple stars.
 
@@ -891,16 +891,16 @@ class TriplePopulation(StarPopulation):
                 ecc_short = draw_eccs(N,period_short)
                 ecc_long = draw_eccs(N,period_long),
             
-                M1 = stars['mass_A']
-                M2 = stars['mass_B']
-                M3 = stars['mass_C']
+            M1 = stars['mass_A']
+            M2 = stars['mass_B']
+            M3 = stars['mass_C']
 
             self.orbpop = TripleOrbitPopulation(M1,M2,M3,period_long,period_short,
                                                 ecclong=ecc_long, eccshort=ecc_short)
         else:
             self.orbpop = orbpop
 
-        StarPopulation.__init__(self,stars,name=name)
+        StarPopulation.__init__(self,stars,**kwargs)
             
 
 class BGStarPopulation(StarPopulation):
@@ -972,6 +972,7 @@ class BGStarPopulation_FromH5(BGStarPopulation,StarPopulation_FromH5):
         #store.close()
 
 
+#BUGGY RIGHT NOW, FIX!
 class BGStarPopulation_TRILEGAL(BGStarPopulation):
     def __init__(self,filename,ra,dec,mags=None,maxrad=1800,
                  name='',**kwargs):
