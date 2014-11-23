@@ -51,6 +51,10 @@ def draw_raghavan_periods(n):
     logps = RAGHAVAN_LOGPERKDE.resample(n)
     return 10**logps
 
+def draw_msc_periods(n):
+    logps = MSC_TRIPLOGPERKDE.resample(n)
+    return 10**logps
+
 def draw_eccs(n,per=10,binsize=0.1,fuzz=0.05,maxecc=0.97):
     """draws eccentricities appropriate to given periods, generated according to empirical data from Multiple Star Catalog
     """
@@ -119,14 +123,11 @@ def semimajor(P,mstar=1):
 def period_from_a(a,mstar):
     return np.sqrt(4*pi**2*(a*AU)**3/(G*mstar*MSUN))/DAY
 
-def addmags(mag1,mag2):
-    F1 = 10**(-0.4*mag1)
-    F2 = 10**(-0.4*mag2)
-    try:
-        F2 = F2[:,newaxis]
-    except:
-        pass
-    return -2.5*np.log10(F1+F2)
+def addmags(*mags):
+    tot=0
+    for mag in mags:
+        tot += 10**(-0.4*mag)
+    return -2.5*log10(tot)
 
 def dfromdm(dm):
     if size(dm)>1:

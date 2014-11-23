@@ -13,6 +13,7 @@ from astropy.units import Quantity
 from astropy.coordinates import SkyCoord
 
 from orbitutils import OrbitPopulation,OrbitPopulation_FromH5
+from orbitutils import TripleOrbitPopulation, TripleOrbitPopulation_FromH5
 from plotutils import setfig,plot2dhist
 
 from simpledist import distributions as dists
@@ -21,7 +22,7 @@ from .constraints import Constraint,UpperLimit,LowerLimit,JointConstraintOr
 from .constraints import ConstraintDict,MeasurementConstraint,RangeConstraint
 from .constraints import ContrastCurveConstraint,VelocityContrastCurveConstraint
 
-from .utils import randpos_in_circle, draw_raghavan_periods, draw_eccs
+from .utils import randpos_in_circle, draw_raghavan_periods, draw_msc_periods, draw_eccs
 from .utils import flat_massratio_fn
 from .utils import distancemodulus, addmags
 
@@ -487,11 +488,11 @@ class BinaryPopulation(StarPopulation):
             and "_B" tags.
 
         distance : ``Quantity`` or float
-            Distance of system.  If not ``Quantity`` then assumed to be in pc.
+            Distance to [each] system.  If not ``Quantity`` then assumed to be in pc.
 
         absmags : bool
             If ``False``, then the mags in primary and secondary get converted 
-            from absolute to apparent magnitudes.
+            from absolute to apparent magnitudes, using provided distance.
 
         orbpop : ``OrbitPopulation``, optional
             Object describing orbits of stars.  If not provided, then ``period``
@@ -505,6 +506,8 @@ class BinaryPopulation(StarPopulation):
             to the empirical distributions of the Raghavan (2010) and
             Multiple Star Catalog distributions (see ``utils`` for details).
         """
+        assert len(primary)==len(secondary)
+
         stars = pd.DataFrame()
 
         for c in primary.columns:
@@ -522,7 +525,6 @@ class BinaryPopulation(StarPopulation):
         stars['distance'] = distance.to('pc').value
         distmods = distancemodulus(stars['distance'])
         stars['distmod'] = distmods
-        #self.distance = distance
 
         if not absmags:
             for col in stars.columns:
@@ -656,6 +658,12 @@ class VolumeLimitedPopulation(BinaryPopulation):
         subdf = self.stars.query(query)
         return subdf['is_binary'].sum()/len(subdf)
 
+class VolumeLimitedPopulation_FromH5(VolumeLimitedPopulation,BinaryPopulation_FromH5):
+    def __init__(self,filename,path=''):
+        """Loads in a VolumeLimitedPopulation saved to .h5
+        """
+        BinaryPopulation_FromH5.__init__(self,filename,path=path)
+
 
 class Simulated_BinaryPopulation(BinaryPopulation):
     def __init__(self,M,distance,q_fn,P_fn,ecc_fn,n=1e4,ichrone=DARTMOUTH,
@@ -772,6 +780,111 @@ class BinaryPopulation_FromH5(BinaryPopulation,StarPopulation_FromH5):
         """
         StarPopulation_FromH5.__init__(self,filename,path=path)
         self.orbpop = OrbitPopulation_FromH5(filename,path='{}/orbpop'.format(path))
+
+
+class TriplePopulation(StarPopulation):
+    def __init__(self, primary, secondary, tertiary, distance, 
+                 orbpop=None, tertiary_with_A=None, absmags=False,
+                 period_short=None, period_long=None,
+                 ecc_short=None, ecc_long=None,
+                 name='', **kwargs):
+        """A population of triple stars
+
+        Parameters
+        ----------
+        primary, secondary, tertiary : ``pandas.DataFrame`` objects
+            Properties of primary, secondary, and tertiary stars.
+            These will get merged into a new ``stars`` attribute,
+            with "_A", "_B", and "_C" tags.
+
+        distance : ``Quantity`` or float
+            Distance to [each] system.
+
+        absmags : bool
+            If ``False``, then the mags in primary and secondary get converted 
+            from absolute to apparent magnitudes, using provided distance.
+
+        orbpop : ``OrbitPopulation``, optional
+            Object describing orbits of stars.  If not provided, then the period
+            and eccentricity keywords must be provided, or else they will be
+            randomly generated (see below).
+
+        tertiary_with_A : array_like, bool
+            Array of boolean values; where ``True``, then the tertiary (star C) is in a 
+            close orbit with star A; where ``False``, it is with star B.  If not
+            provided, assignments will be made randomly.
+
+            
+        period_short, period_long, ecc_short, ecc_long : array-like, optional
+            Orbital periods and eccentricities of short and long-period orbits. 
+            "Short" describes the close pair of the hierarchical system; "long"
+            describes the separation between the two major components.  Randomly
+            generated if not provided.
+
+            
+        """
+        assert len(primary)==len(secondary) and len(primary)==len(tertiary)
+        N = len(primary)
+
+        stars = pd.DataFrame()
+
+        for c in primary.columns:
+            if re.search('_mag',c):
+                 stars[c] = addmags(primary[c],secondary[c],tertiary[c])
+            stars['{}_A'.format(c)] = primary[c]
+        for c in secondary.columns:
+            stars['{}_B'.format(c)] = secondary[c]
+        for c in tertiary.columns:
+            stars['{}_C'.format(c)] = tertiary[c]
+               
+        #assign star C to either A or B.
+        if tertiary_with_A is None:
+            r = rand.random(N)
+            tertiary_with_A = r < 0.5
+        stars['C_orbits'] = 'B'
+        stars['C_orbits'][tertiary_with_A] = 'A'
+
+        if type(distance) != Quantity:
+            distance = distance * u.pc
+
+        stars['distance'] = distance.to('pc').value
+        distmods = distancemodulus(stars['distance'])
+        stars['distmod'] = distmods
+
+        if not absmags:
+            for col in stars.columns:
+                if re.search('_mag',col):
+                    stars[col] += distmods
+
+        if orbpop is None:
+            if period_long is None or period_short is None:
+                period_1 = draw_raghavan_periods(N)
+                period_2 = draw_msc_periods(N)                
+                period_short = np.minimum(period_1, period_2)
+                period_long = np.maximum(period_1, period_2)
+
+            if ecc_short is None or ecc_long is None:
+                ecc_short = draw_eccs(N,period_short)
+                ecc_long = draw_eccs(N,period_long),
+            
+            #For orbit population, stars 2 and 3 are in short orbit, and star 1 in long.
+            # So we need to define the proper mapping from A,B,C to 1,2,3.
+            # If C is with A, then A=2, C=3, B=1
+            # If C is with B, then A=1, B=2, C=3
+
+            CwA = stars['C_orbits']=='A'
+            CwB = stars['C_orbits']=='B'
+            M1 = stars['mass_B']*CwA + stars['mass_A']*CwB
+            M2 = stars['mass_A']*CwA + stars['mass_B']*CwA
+            M3 = stars['mass_C']
+
+            self.orbpop = TripleOrbitPopulation(M1,M2,M3,period_long,period_short,
+                                                ecclong=ecc_long, eccshort=ecc_short)
+        else:
+            self.orbpop = orbpop
+
+        StarPopulation.__init__(self,stars,name=name)
+            
 
 class BGStarPopulation(StarPopulation):
     def __init__(self,stars,mags=None,maxrad=1800,density=None,name=''):
