@@ -572,6 +572,7 @@ class BinaryPopulation(StarPopulation):
             to the empirical distributions of the Raghavan (2010) and
             Multiple Star Catalog distributions (see ``utils`` for details).
         """
+
         assert len(primary)==len(secondary)
 
         stars = pd.DataFrame()
@@ -984,7 +985,7 @@ class BGStarPopulation_TRILEGAL(BGStarPopulation):
             stars = pd.read_hdf(filename,'df')
         except:
             get_trilegal(filename,ra,dec,**kwargs)
-            stars = pd.read_hdf(os.path.join(folder,filename),'df')
+            stars = pd.read_hdf('{}.h5'.format(filename),'df')
         store = pd.HDFStore(filename)
         self.trilegal_args = store.get_storer('df').attrs.trilegal_args
         store.close()
