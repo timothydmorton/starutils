@@ -123,7 +123,7 @@ def semimajor(P,mstar=1):
     return ((P*DAY/2/pi)**2*G*mstar*MSUN)**(1./3)/AU
 
 def period_from_a(a,mstar):
-    return np.sqrt(4*pi**2*(a*AU)**3/(G*mstar*MSUN))/DAY
+    return np.sqrt(4*np.pi**2*(a*AU)**3/(G*mstar*MSUN))/DAY
 
 def addmags(*mags):
     tot=0
@@ -160,45 +160,52 @@ def mult_masses(mA, f_binary=0.4, f_triple=0.12,
     star with m1 orbits (m2 + m3).  This means that the primary mass mA will correspond
     either to m1 or m2.  Any mass set to 0 means that component does not exist.
     """
+    
     if np.size(mA) > 1:
         n = len(mA)
     else:
         mA = np.ones(n) * mA
-        
-    q1s = rand.random(n)*(1-minq) + minq
-    q2s = rand.random(n)*(1-minq) + minq
+
 
     r = rand.random(n)
-    hasB = r < f_binary
-    hasC = r < f_triple
+    is_single = r > (f_binary + f_triple)
+    is_double = (r > f_triple) & (r < (f_binary + f_triple))
+    is_triple = r <= f_triple
 
     CwA = rand.random(n) < 0.5
     CwB = ~CwA
-
-    mB = (CwA*mA*q1s*(1-q2s) + CwB*mA*q1s)*hasC + q1s*mA*~hasC
-    mC = CwA*mA*q2s + CwB*mB*q2s    
-
-    mB *= hasB
-    mC *= hasC
-
-    #enforce minimum mass, iteratively
-    lo = ((mB < minmass) & (mB != 0)) | ((mC < minmass) & (mC !=0))
-    nlo = lo.sum()
-    niter = 0
-    while nlo > 0:
-        q1s = rand.random(nlo)*(1-minq) + minq
-        q2s = rand.random(nlo)*(1-minq) + minq
         
-        mB[lo] = ((CwA[lo]*mA[lo]*q1s*(1-q2s) +
-                    CwB[lo]*mA[lo]*q1s)*hasC[lo] +
-                  q1s*mA[lo]*~hasC[lo])
-        mC[lo] = CwA[lo]*mA[lo]*q2s + CwB[lo]*mB[lo]*q2s
-        
-        lo = ((mB < minmass) & (mB != 0)) | ((mC < minmass) & (mC !=0))
-        nlo = lo.sum()
-        niter += 1
-        if niter == 100:
-            raise RuntimeError('100 iterations reached trying simulate multiple system masses with minmass={}'.format(minmass))
+
+    #these for Triples:
+    
+    minq2_A = minmass/mA
+    q2_A = rand.random(n)*(1-minq2_A) + minq2_A
+    minq1_A = (minmass/mA)/(1+q2_A)
+    maxq1_A = 1/(1+q2_A)
+    q1_A = rand.random(n)*(maxq1_A-minq1_A) + minq1_A
+
+    minq1_B = 2*minmass/mA
+    q1_B = rand.random(n)*(1-minq1_B) + minq1_B
+    minq2_B = np.maximum(((q1_B*mA)-minmass)/minmass,
+                         (q1_B*mA - minmass)/(q1_B*mA + minmass))
+    maxq2_B = 1.
+    q2_B = rand.random(n)*(maxq2_B-minq2_B) + minq2_B
+
+    
+    mB_A = q1_A*(1 + q2_A) * mA
+    mC_A = q2_A * mA
+
+    mB_B = (q1_B/(1 + q2_B)) * mA
+    mC_B = (q1_B*q2_B)/(1 + q2_B) * mA
+
+    mB = CwA*mB_A + CwB*mB_B
+    mC = CwA*mC_A + CwB*mC_B
+
+    #for binaries-only
+    qmin = minmass/mA
+    q = rand.random(n)*(1-qmin) + qmin    
+    mB[is_double] = q[is_double]*mA[is_double]
+
                 
     #now need to define the proper mapping from A,B,C to 1,2,3:
     # If no B or C present, then A=1
@@ -206,9 +213,9 @@ def mult_masses(mA, f_binary=0.4, f_triple=0.12,
     # If both B and C present then:
     #     If C is with A, then A=2, C=3, B=1
     #     If C is with B, then A=1, B=2, C=3
-    m1 = (mA)*~hasB + (CwA*mB + CwB*mA)*hasB
-    m2 = (mB)*~hasC + (CwA*mA + CwB*mB)*hasC
-    m3 = mC
-
+    m1 = (mA)*(is_single + is_double) + (CwA*mB + CwB*mA)*is_triple
+    m2 = (mB)*is_double + (CwA*mA + CwB*mB)*is_triple
+    m3 = mC*is_triple
+    
     return m1, m2, m3
     

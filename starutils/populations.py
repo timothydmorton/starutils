@@ -617,7 +617,8 @@ class BinaryPopulation(StarPopulation):
     def binary_fraction(self,query='mass_A >= 0'):
         subdf = self.stars.query(query)
         nbinaries = (subdf['mass_B'] > 0).sum()
-        return nbinaries/len(subdf)
+        frac = nbinaries/len(subdf)
+        return frac, frac/np.sqrt(nbinaries)
         
     @property
     def Rsky(self):
@@ -713,11 +714,14 @@ class VolumeLimitedPopulation(BinaryPopulation):
         return self.stars.query('is_binary')
 
 
-    def binary_fraction(self,query='is_binary or not is_binary'):
+    def binary_fraction(self,query='is_binary or not is_binary', unc=False):
         subdf = self.stars.query(query)
-        return subdf['is_binary'].sum()/len(subdf)
-
-
+        frac = subdf['is_binary'].sum()/len(subdf)
+        if unc:
+            return frac, frac/np.sqrt(subdf['is_binary'].sum())
+        else:
+            return frac
+        
 class Simulated_BinaryPopulation(BinaryPopulation):
     def __init__(self,M,q_fn,P_fn,ecc_fn,n=1e4,ichrone=DARTMOUTH,
                  age=9.5,feh=0.0, minmass=0.12, **kwargs):
@@ -930,30 +934,74 @@ class TriplePopulation(StarPopulation):
     def triples(self):
         return self.stars.query('mass_B > 0 and mass_C > 0')
         
-    def binary_fraction(self,query='mass_A > 0'):
+    def binary_fraction(self,query='mass_A > 0', unc=False):
         subdf = self.stars.query(query)
-        nbinaries = (subdf['mass_B'] > 0 & subdf['mass_C']==0).sum()
-        return nbinaries/len(subdf)
-
-    def triple_fraction(self,query='mass_A > 0'):
+        nbinaries = ((subdf['mass_B'] > 0) & (subdf['mass_C']==0)).sum()
+        frac = nbinaries/len(subdf)
+        if unc:
+            return frac, frac/np.sqrt(nbinaries)
+        else:
+            return frac
+        
+    def triple_fraction(self,query='mass_A > 0', unc=False):
         subdf = self.stars.query(query)
-        ntriples = (subdf['mass_B'] > 0 & subdf['mass_C']>0).sum()
-        return ntriples/len(subdf)
-
+        ntriples = ((subdf['mass_B'] > 0) & (subdf['mass_C'] > 0)).sum()
+        frac = ntriples/len(subdf)
+        if unc:
+            return frac, frac/np.sqrt(ntriples)
+        else:
+            return frac
         
 class MultipleStarPopulation(TriplePopulation):
-    def __init__(self, m1, f_binary=0.4, f_triple=0.12,
-                 n=1e5, minmass=0.11, ichrone=DARTMOUTH,
+    def __init__(self, m1, age=9.6, feh=0.0,
+                 f_binary=0.4, f_triple=0.12,
+                 minq=0.1, minmass=0.11,
+                 n=1e5, ichrone=DARTMOUTH,
                  multmass_fn=mult_masses,
-                 long_period_fn=draw_raghavan_periods,
-                 short_period_fn=draw_msc_periods,
-                 ecc_fn=draw_eccs):
+                 period_long_fn=draw_raghavan_periods,
+                 period_short_fn=draw_msc_periods,
+                 ecc_fn=draw_eccs,orbpop=None,
+                 **kwargs):
         """A population of single, double, and triple stars, generated according to prescription.
 
         
         """
+        m1, m2, m3 = multmass_fn(m1, f_binary=f_binary,
+                                 f_triple=f_triple,
+                                 minq=minq, minmass=minmass,
+                                 n=n)
+
+        #generate stellar properties
+        primary = ichrone(m1,age,feh)
+        secondary = ichrone(m2,age,feh)
+        tertiary = ichrone(m3,age,feh)
         
-        
+        #clean up columns that become nan when called with mass=0
+        # Remember, we want mass=0 and mags=inf when something doesn't exist
+        no_secondary = (m2==0)
+        no_tertiary = (m3==0)
+        for c in secondary.columns: #
+            if re.search('_mag',c):
+                secondary[c][no_secondary] = np.inf
+                tertiary[c][no_tertiary] = np.inf
+        secondary['mass'][no_secondary] = 0
+        tertiary['mass'][no_tertiary] = 0
+
+        period_1 = period_long_fn(n)
+        period_2 = period_short_fn(n)
+        period_short = np.minimum(period_1, period_2)
+        period_long = np.maximum(period_1, period_2)
+
+        ecc_short = draw_eccs(n, period_short)
+        ecc_long = draw_eccs(n, period_long)
+
+        TriplePopulation.__init__(self, primary, secondary, tertiary,
+                                  orbpop=orbpop,
+                                  period_short=period_short,
+                                  period_long=period_long,
+                                  ecc_short=ecc_short,
+                                  ecc_long=ecc_long,**kwargs)
+                        
 class BGStarPopulation(StarPopulation):
     def __init__(self,stars,mags=None,maxrad=1800,density=None,name=''):
         """Background star population
