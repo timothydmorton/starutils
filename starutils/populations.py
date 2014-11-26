@@ -23,7 +23,7 @@ from .constraints import ConstraintDict,MeasurementConstraint,RangeConstraint
 from .constraints import ContrastCurveConstraint,VelocityContrastCurveConstraint
 
 from .utils import randpos_in_circle, draw_raghavan_periods, draw_msc_periods, draw_eccs
-from .utils import flat_massratio_fn
+from .utils import flat_massratio_fn, mult_masses
 from .utils import distancemodulus, addmags, dfromdm
 
 from .trilegal import get_trilegal
@@ -546,19 +546,23 @@ class StarPopulation_FromH5(StarPopulation):
 class BinaryPopulation(StarPopulation):
     def __init__(self,primary,secondary,
                  orbpop=None, period=None,
-                 ecc=None,**kwargs):
+                 ecc=None,
+                 is_single=None,
+                 **kwargs):
 
         """A population of binary stars.
 
         If ``OrbitPopulation`` provided, that will describe the orbits;
-        if not, then orbit population will be generated.
+        if not, then orbit population will be generated.  Single stars may
+        be indicated if desired by having their mass set to zero and all
+        magnitudes set to ``inf``.
 
         Parameters
         ----------
         primary,secondary : ``DataFrame``
             Properties of primary and secondary stars, respectively.
             These get merged into new ``stars`` attribute, with "_A"
-            and "_B" tags.
+            and "_B" tags.   
 
         orbpop : ``OrbitPopulation``, optional
             Object describing orbits of stars.  If not provided, then ``period``
@@ -571,6 +575,7 @@ class BinaryPopulation(StarPopulation):
             will be randomly generated according
             to the empirical distributions of the Raghavan (2010) and
             Multiple Star Catalog distributions (see ``utils`` for details).
+
         """
 
         assert len(primary)==len(secondary)
@@ -582,8 +587,8 @@ class BinaryPopulation(StarPopulation):
                 stars[c] = addmags(primary[c],secondary[c])
             stars['{}_A'.format(c)] = primary[c]
         for c in secondary.columns:
-            stars['{}_B'.format(c)] = secondary[c]
-
+            stars['{}_B'.format(c)] = secondary[c]            
+            
         stars['q'] = stars['mass_B']/stars['mass_A']
 
 
@@ -601,6 +606,19 @@ class BinaryPopulation(StarPopulation):
         StarPopulation.__init__(self,stars,**kwargs)
 
 
+    @property
+    def singles(self):
+        return self.stars.query('mass_B == 0')
+
+    @property
+    def binaries(self):
+        return self.stars.query('mass_B > 0')
+
+    def binary_fraction(self,query='mass_A >= 0'):
+        subdf = self.stars.query(query)
+        nbinaries = (subdf['mass_B'] > 0).sum()
+        return nbinaries/len(subdf)
+        
     @property
     def Rsky(self):
         r = (self.orbpop.Rsky/self.distance)
@@ -820,7 +838,7 @@ class VolumeLimitedPopulation_FromH5(VolumeLimitedPopulation,BinaryPopulation_Fr
 
 class TriplePopulation(StarPopulation):
     def __init__(self, primary, secondary, tertiary, 
-                 orbpop=None, absmags=False,
+                 orbpop=None, 
                  period_short=None, period_long=None,
                  ecc_short=0, ecc_long=0,
                  **kwargs):
@@ -828,7 +846,9 @@ class TriplePopulation(StarPopulation):
 
         Primary orbits (secondary + tertiary) in a long orbit;
         secondary and tertiary orbit each other with a shorter orbit.
-
+        Single or double stars may be indicated if desired by having
+        the masses of secondary or tertiary set to zero, and all magnitudes
+        to ``inf``.
         
         Parameters
         ----------
@@ -836,10 +856,6 @@ class TriplePopulation(StarPopulation):
             Properties of primary, secondary, and tertiary stars.
             These will get merged into a new ``stars`` attribute,
             with "_A", "_B", and "_C" tags.
-
-        absmags : bool
-            If ``False``, then the mags in primary and secondary get converted 
-            from absolute to apparent magnitudes, using provided distance.
 
         orbpop : ``OrbitPopulation``, optional
             Object describing orbits of stars.  If not provided, then the period
@@ -901,8 +917,43 @@ class TriplePopulation(StarPopulation):
             self.orbpop = orbpop
 
         StarPopulation.__init__(self,stars,**kwargs)
-            
 
+    @property
+    def singles(self):
+        return self.stars.query('mass_B==0 and mass_C==0')
+
+    @property
+    def binaries(self):
+        return self.stars.query('mass_B > 0 and mass_C==0')
+
+    @property
+    def triples(self):
+        return self.stars.query('mass_B > 0 and mass_C > 0')
+        
+    def binary_fraction(self,query='mass_A > 0'):
+        subdf = self.stars.query(query)
+        nbinaries = (subdf['mass_B'] > 0 & subdf['mass_C']==0).sum()
+        return nbinaries/len(subdf)
+
+    def triple_fraction(self,query='mass_A > 0'):
+        subdf = self.stars.query(query)
+        ntriples = (subdf['mass_B'] > 0 & subdf['mass_C']>0).sum()
+        return ntriples/len(subdf)
+
+        
+class MultipleStarPopulation(TriplePopulation):
+    def __init__(self, m1, f_binary=0.4, f_triple=0.12,
+                 n=1e5, minmass=0.11, ichrone=DARTMOUTH,
+                 multmass_fn=mult_masses,
+                 long_period_fn=draw_raghavan_periods,
+                 short_period_fn=draw_msc_periods,
+                 ecc_fn=draw_eccs):
+        """A population of single, double, and triple stars, generated according to prescription.
+
+        
+        """
+        
+        
 class BGStarPopulation(StarPopulation):
     def __init__(self,stars,mags=None,maxrad=1800,density=None,name=''):
         """Background star population

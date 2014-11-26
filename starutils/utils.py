@@ -150,3 +150,65 @@ def distancemodulus(d):
 
 def fbofm(M):
     return 0.45 - (0.7-M)/4
+
+
+def mult_masses(mA, f_binary=0.4, f_triple=0.12,
+                minmass=0.11, minq=0.1, n=1e5):
+    """Returns m1, m2, and m3 appropriate for TripleStarPopulation, given "primary" mass (most massive of system) and binary/triple fractions.
+                
+
+    star with m1 orbits (m2 + m3).  This means that the primary mass mA will correspond
+    either to m1 or m2.  Any mass set to 0 means that component does not exist.
+    """
+    if np.size(mA) > 1:
+        n = len(mA)
+    else:
+        mA = np.ones(n) * mA
+        
+    q1s = rand.random(n)*(1-minq) + minq
+    q2s = rand.random(n)*(1-minq) + minq
+
+    r = rand.random(n)
+    hasB = r < f_binary
+    hasC = r < f_triple
+
+    CwA = rand.random(n) < 0.5
+    CwB = ~CwA
+
+    mB = (CwA*mA*q1s*(1-q2s) + CwB*mA*q1s)*hasC + q1s*mA*~hasC
+    mC = CwA*mA*q2s + CwB*mB*q2s    
+
+    mB *= hasB
+    mC *= hasC
+
+    #enforce minimum mass, iteratively
+    lo = ((mB < minmass) & (mB != 0)) | ((mC < minmass) & (mC !=0))
+    nlo = lo.sum()
+    niter = 0
+    while nlo > 0:
+        q1s = rand.random(nlo)*(1-minq) + minq
+        q2s = rand.random(nlo)*(1-minq) + minq
+        
+        mB[lo] = ((CwA[lo]*mA[lo]*q1s*(1-q2s) +
+                    CwB[lo]*mA[lo]*q1s)*hasC[lo] +
+                  q1s*mA[lo]*~hasC[lo])
+        mC[lo] = CwA[lo]*mA[lo]*q2s + CwB[lo]*mB[lo]*q2s
+        
+        lo = ((mB < minmass) & (mB != 0)) | ((mC < minmass) & (mC !=0))
+        nlo = lo.sum()
+        niter += 1
+        if niter == 100:
+            raise RuntimeError('100 iterations reached trying simulate multiple system masses with minmass={}'.format(minmass))
+                
+    #now need to define the proper mapping from A,B,C to 1,2,3:
+    # If no B or C present, then A=1
+    # If B present but not C, then A=1, B=2
+    # If both B and C present then:
+    #     If C is with A, then A=2, C=3, B=1
+    #     If C is with B, then A=1, B=2, C=3
+    m1 = (mA)*~hasB + (CwA*mB + CwB*mA)*hasB
+    m2 = (mB)*~hasC + (CwA*mA + CwB*mB)*hasC
+    m3 = mC
+
+    return m1, m2, m3
+    
