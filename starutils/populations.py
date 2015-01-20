@@ -861,7 +861,7 @@ class TriplePopulation(StarPopulation):
             These will get merged into a new ``stars`` attribute,
             with "_A", "_B", and "_C" tags.
 
-        orbpop : ``OrbitPopulation``, optional
+        orbpop : ``TripleOrbitPopulation``, optional
             Object describing orbits of stars.  If not provided, then the period
             and eccentricity keywords must be provided, or else they will be
             randomly generated (see below).
@@ -964,7 +964,41 @@ class MultipleStarPopulation(TriplePopulation):
                  **kwargs):
         """A population of single, double, and triple stars, generated according to prescription.
 
-        
+        Parameters
+        ----------
+        m1 : float or array_like
+            Mass of primary star(s).  If array, then the simulation will be lots of individual
+            systems; if float, then the simulation will be lots of realizations of
+            one system.
+
+        age, feh : float or array_like (optional)
+            Age, feh of system(s).
+
+        f_binary, f_triple : floats summing to between 0 and 1 (optional)
+            Fraction of systems that should be binaries or triples.
+
+        minq : float (optional):
+            Minimum mass ratio.
+
+        minmass : float (optional):
+            Minimum stellar mass to simulate.
+
+        n : integer (optional):
+            Size of simulation (if m1 is a scalar)
+
+        ichrone : ``Isochrone`` (optional)
+            Stellar model isochrone to generate simulations.  Defaults
+            to Dartmouth model grid.
+
+        multmass_fn, peroid_long_fn, period_short_fn, ecc_fn : callables (optional)
+            Functions to generate masses, orbital periods, and eccentricities.
+            Defaults built in.  See ``TriplePopulation``.
+            
+        orbpop : ``TripleOrbitPopulation`` (optional)
+            Object describing orbits of stars.  If not provided, orbits will
+            be randomly generated according to generating functions.
+            
+        Additional keyword arguments passed to ``TriplePopulation``.
         """
         m1, m2, m3 = multmass_fn(m1, f_binary=f_binary,
                                  f_triple=f_triple,
@@ -1066,24 +1100,52 @@ class BGStarPopulation_FromH5(BGStarPopulation,StarPopulation_FromH5):
         StarPopulation_FromH5.__init__(self,filename,path=path)
 
 
-#BUGGY RIGHT NOW, FIX!
 class BGStarPopulation_TRILEGAL(BGStarPopulation):
-    def __init__(self,filename,ra,dec,mags=None,maxrad=1800,
+    def __init__(self,filename,ra=None,dec=None,mags=None,maxrad=1800,
                  name='',**kwargs):
         """Creates TRILEGAL simulation for ra,dec; loads as BGStarPopulation
 
-        keyword arguments passed to ``get_trilegal``
+        Parameters
+        ----------
+        filename : string
+            Desired name of the TRILEGAL simulation.  Can either have '.h5' extension
+            or not.  If filename (or 'filename.h5') exists locally, it will be
+            loaded; otherwise, TRILEGAL will be called via the ``get_trilegal`` perl
+            script, and the file will be generated.
+
+        ra, dec : float (optional)
+            Sky coordinates of TRILEGAL simulation.  Must be passed if generating 
+            TRILEGAL simulation and not just reading from existing file.
+
+        mags : dictionary (optional)
+            Dictionary of primary star magnitudes (if this is being used to generate
+            a background population behind a particular foreground star).  This 
+            must be set in order to use the ``dmag`` attribute.
+
+        maxrad : float (optional)
+            Maximum distance (arcsec) out to which to place simulated stars.
+
+        name : string (optional)
+            A name, if desired.
+
+        Additional keyword arguments passed to ``get_trilegal``
         """
-        if not re.search('.*\.h5$',filename):
+        m = re.search('(.*)\.h5$',filename)
+        if not m:
             h5filename = '{}.h5'.format(filename)
+            basefilename = filename
         else:
             h5filename = filename
+            basefilename = m.group(1)
+
         try:
             stars = pd.read_hdf(h5filename,'df', mode='r')
         except:
-            get_trilegal(filename,ra,dec,**kwargs)
+            if ra is None or dec is None:
+                raise ValueError('Must provide ra,dec if simulation file does not already exist.')
+            get_trilegal(basefilename,ra,dec,**kwargs)
             stars = pd.read_hdf(h5filename,'df', mode='r')
-        store = pd.HDFStore(filename)
+        store = pd.HDFStore(h5filename)
         self.trilegal_args = store.get_storer('df').attrs.trilegal_args
         store.close()
         
