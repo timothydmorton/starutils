@@ -663,7 +663,7 @@ class VolumeLimitedPopulation(BinaryPopulation):
     def __init__(self, m1, dmax, n=1e5, binary_fraction=0.4,
                  minmass=0.11, ichrone=DARTMOUTH,
                  age=9.7, feh=0.0, **kwargs): 
-        """A volume limited sample of stars
+        """A volume limited sample of stars ***OBSELETE***
 
         Parameters
         ----------
@@ -834,7 +834,7 @@ class BinaryPopulation_FromH5(BinaryPopulation,StarPopulation_FromH5):
 
 class VolumeLimitedPopulation_FromH5(VolumeLimitedPopulation,BinaryPopulation_FromH5):
     def __init__(self,filename,path=''):
-        """Loads in a VolumeLimitedPopulation saved to .h5
+        """Loads in a VolumeLimitedPopulation saved to .h5 ***OBSELETE?***
         """
         BinaryPopulation_FromH5.__init__(self,filename,path=path)
 
