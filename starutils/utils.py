@@ -132,7 +132,7 @@ def addmags(*mags):
     return -2.5*np.log10(tot)
 
 def dfromdm(dm):
-    if size(dm)>1:
+    if np.size(dm)>1:
         dm = np.atleast_1d(dm)
     return 10**(1+dm/5)
 

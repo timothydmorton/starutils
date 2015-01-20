@@ -520,8 +520,8 @@ class StarPopulation_FromH5(StarPopulation):
     def __init__(self,filename,path=''):
         """Loads in a StarPopulation saved to .h5
         """
-        stars = pd.read_hdf(filename,path+'/stars')
-        constraint_df = pd.read_hdf(filename,path+'/constraints')
+        stars = pd.read_hdf(filename,path+'/stars', mode='r')
+        constraint_df = pd.read_hdf(filename,path+'/constraints', mode='r')
         store = pd.HDFStore(filename)
         attrs = store.get_storer('{}/stars'.format(path)).attrs
         distribution_skip = attrs.distribution_skip
@@ -1064,11 +1064,6 @@ class BGStarPopulation_FromH5(BGStarPopulation,StarPopulation_FromH5):
         """Loads in a BGStarPopulation saved to .h5
         """
         StarPopulation_FromH5.__init__(self,filename,path=path)
-        #store = pd.HDFStore(filename)
-        #properties = store.get_storer('{}/stars'.format(path)).attrs.properties
-        #self._maxrad = properties['_maxrad']
-        #self.density = properties['density']
-        #store.close()
 
 
 #BUGGY RIGHT NOW, FIX!
@@ -1079,16 +1074,24 @@ class BGStarPopulation_TRILEGAL(BGStarPopulation):
 
         keyword arguments passed to ``get_trilegal``
         """
-        self.ra = ra
-        self.dec = dec
+        if not re.search('.*\.h5$',filename):
+            h5filename = '{}.h5'.format(filename)
+        else:
+            h5filename = filename
         try:
-            stars = pd.read_hdf(filename,'df')
+            stars = pd.read_hdf(h5filename,'df', mode='r')
         except:
             get_trilegal(filename,ra,dec,**kwargs)
-            stars = pd.read_hdf('{}.h5'.format(filename),'df')
+            stars = pd.read_hdf(h5filename,'df', mode='r')
         store = pd.HDFStore(filename)
         self.trilegal_args = store.get_storer('df').attrs.trilegal_args
         store.close()
+        
+        c = SkyCoord(self.trilegal_args['l'],self.trilegal_args['b'],
+                     unit='deg',frame='galactic')
+
+        self.coords = c.icrs
+
         area = self.trilegal_args['area']*(u.deg)**2
         density = len(stars)/area
 

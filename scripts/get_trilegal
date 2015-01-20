@@ -1,4 +1,5 @@
 #!/usr/bin/perl
+# Author: Leo Girardi
 # TDM added <use_binaries> input argument; 1 if binaries should be simulated, 0 if no.
 $argc = @ARGV;
 if ($argc<8) {
