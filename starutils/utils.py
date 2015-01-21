@@ -120,7 +120,7 @@ def withinroche(semimajors,M1,R1,M2,R2):
 def semimajor(P,mstar=1):
     """Period in days, mstar in solar masses
     """
-    return ((P*DAY/2/pi)**2*G*mstar*MSUN)**(1./3)/AU
+    return ((P*DAY/2/np.pi)**2*G*mstar*MSUN)**(1./3)/AU
 
 def period_from_a(a,mstar):
     return np.sqrt(4*np.pi**2*(a*AU)**3/(G*mstar*MSUN))/DAY
