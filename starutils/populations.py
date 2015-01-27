@@ -1123,9 +1123,10 @@ class ColormatchMultipleStarPopulation(TriplePopulation):
                     df = pd.read_hdf(starfield,'df',mode='r')
                 else:
                     df = starfield
-                m1 = df['Mact']
-                age = df['logAge']
-                feh = df['[M/H]']
+                inds = np.random.randint(len(df),size=n)
+                m1 = df['Mact'][inds]
+                age = df['logAge'][inds]
+                feh = df['[M/H]'][inds]
 
             pop = MultipleStarPopulation(m1, age, feh, n=n)
 
