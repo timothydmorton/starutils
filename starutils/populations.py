@@ -953,7 +953,8 @@ class TriplePopulation(StarPopulation):
             return frac
         
 class MultipleStarPopulation(TriplePopulation):
-    def __init__(self, m1, age=9.6, feh=0.0,
+    def __init__(self, m1=1., age=9.6, feh=0.0,
+                 starfield=None,
                  f_binary=0.4, f_triple=0.12,
                  minq=0.1, minmass=0.11,
                  n=1e5, ichrone=DARTMOUTH,
@@ -961,6 +962,8 @@ class MultipleStarPopulation(TriplePopulation):
                  period_long_fn=draw_raghavan_periods,
                  period_short_fn=draw_msc_periods,
                  ecc_fn=draw_eccs,orbpop=None,
+                 mags=None, colors=None, colortol=0.1,
+                 keywords=None,
                  **kwargs):
         """A population of single, double, and triple stars, generated according to prescription.
 
@@ -1000,6 +1003,10 @@ class MultipleStarPopulation(TriplePopulation):
             
         Additional keyword arguments passed to ``TriplePopulation``.
         """
+
+        if keywords is None:
+            self.keywords = {}
+
         m1, m2, m3 = multmass_fn(m1, f_binary=f_binary,
                                  f_triple=f_triple,
                                  minq=minq, minmass=minmass,
@@ -1009,7 +1016,7 @@ class MultipleStarPopulation(TriplePopulation):
         primary = ichrone(m1,age,feh)
         secondary = ichrone(m2,age,feh)
         tertiary = ichrone(m3,age,feh)
-        
+
         #clean up columns that become nan when called with mass=0
         # Remember, we want mass=0 and mags=inf when something doesn't exist
         no_secondary = (m2==0)
@@ -1020,6 +1027,45 @@ class MultipleStarPopulation(TriplePopulation):
                 tertiary[c][no_tertiary] = np.inf
         secondary['mass'][no_secondary] = 0
         tertiary['mass'][no_tertiary] = 0
+
+
+        #if mags and colors provided, enforce that everything 
+        # matches given colors
+        cond = np.ones(n).astype(bool)
+        if mags is not None and colors is not None:
+            mags_tot = {}
+            for c in colors:
+                m = re.search('^(\w)(\w)$',c)                
+                if m:
+                    b1 = m.group(1)
+                    b2 = m.group(2)
+                    if b1 not in mags or b2 not in mags:
+                        logging.warning('color {} ignored, either {} or {} not provided.'.format(c,b1,b2))
+                        continue
+                    if np.isnan(mags[b1]) or np.isnan(mags[b2]):
+                        logging.warning('color {} ignored, either {} or {} mag is nan.'.format(c,b1,b2))
+                        continue
+
+                    if b1 not in mags_tot:
+                        mags_tot[b1] = addmags(primary['{}_mag'.format(b1)],
+                                               secondary['{}_mag'.format(b1)],
+                                               tertiary['{}_mag'.format(b1)])
+                    if b2 not in mags_tot:
+                        mags_tot[b2] = addmags(primary['{}_mag'.format(b2)],
+                                               secondary['{}_mag'.format(b2)],
+                                               tertiary['{}_mag'.format(b2)])
+
+                    obs_color = mags[b1] - mags[b2]
+                    keywords['{}-{}'.format(b1,b2)] = obs_color
+
+                    mod_color = mags_tot[b1] - mags_tot[b2]
+
+                    cmatch = np.absolute(mod_color - obs_color) < colortol
+                    cond &= cmatch
+                else:
+                    logging.warning('unrecognized color: {}'.format(c))
+            
+
 
         period_1 = period_long_fn(n)
         period_2 = period_short_fn(n)
