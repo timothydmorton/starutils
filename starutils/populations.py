@@ -1001,17 +1001,6 @@ class MultipleStarPopulation(TriplePopulation):
         Additional keyword arguments passed to ``TriplePopulation``.
 
 
-        TODO: implement below, or not?
-
-        mags : dictionary (optional)
-            Dictionary of magnitudes of total system.
-
-        colors : list (optional)
-            Colors to use to constrain population generation.  e.g. ['JK'], or ['JK','gr'], etc.
-
-        colortol : float (optional)
-            Tolerance within which to constrain color matching.
-
         """
 
         if keywords is None:
@@ -1038,6 +1027,59 @@ class MultipleStarPopulation(TriplePopulation):
         secondary['mass'][no_secondary] = 0
         tertiary['mass'][no_tertiary] = 0
 
+
+        period_1 = period_long_fn(n)
+        period_2 = period_short_fn(n)
+        period_short = np.minimum(period_1, period_2)
+        period_long = np.maximum(period_1, period_2)
+
+        ecc_short = draw_eccs(n, period_short)
+        ecc_long = draw_eccs(n, period_long)
+
+        TriplePopulation.__init__(self, primary, secondary, tertiary,
+                                  orbpop=orbpop,
+                                  period_short=period_short,
+                                  period_long=period_long,
+                                  ecc_short=ecc_short,
+                                  ecc_long=ecc_long,**kwargs)
+                        
+class ColormatchMultipleStarPopulation(MultipleStarPopulation):
+    def __init__(self, mags, colors=['JK'], colortol=0.1, 
+                 m1=None, age=9.6, feh=0.0, n=1e5,
+                 starfield=None, **kwargs):
+        """Multiple star population constrained to match provided colors
+
+        starfield is .h5 file of TRILEGAL simulation
+
+        Parameters
+        ----------
+        mags : dictionary
+            Dictionary of magnitudes of total system.
+
+        colors : list (optional)
+            Colors to use to constrain population generation.  e.g. ['JK'], or ['JK','gr'], etc.
+
+        colortol : float (optional)
+            Tolerance within which to constrain color matching.
+
+
+        """
+
+        self.mags = mags
+        self.colors = colors
+        self.colortol = colortol
+
+        self.starfield = starfield
+
+        if m1 is None:
+            if starfield is None:
+                raise ValueError('If masses are not provided, then starfield must be.')
+            df = pd.read_hdf(starfield,'df')
+            m1 = df['Mact']
+            age = df['logAge']
+            feh = df['[M/H]']
+
+        MultipleStarPopulation.__init__(self, m1, age, feh)
 
         #if mags and colors provided, enforce that everything 
         # matches given colors
@@ -1076,28 +1118,8 @@ class MultipleStarPopulation(TriplePopulation):
                     logging.warning('unrecognized color: {}'.format(c))
 
 
-        period_1 = period_long_fn(n)
-        period_2 = period_short_fn(n)
-        period_short = np.minimum(period_1, period_2)
-        period_long = np.maximum(period_1, period_2)
 
-        ecc_short = draw_eccs(n, period_short)
-        ecc_long = draw_eccs(n, period_long)
-
-        TriplePopulation.__init__(self, primary, secondary, tertiary,
-                                  orbpop=orbpop,
-                                  period_short=period_short,
-                                  period_long=period_long,
-                                  ecc_short=ecc_short,
-                                  ecc_long=ecc_long,**kwargs)
-                        
-class ColormatchMultipleStarPopulation(MultipleStarPopulation):
-    def __init__(self, mags, colors=['JK'], colortol=0.1, 
-                 m1=None, starfield=None, **kwargs):
-        """Multiple star population constrained to match provided colors
-        """
-
-        if m1 is None:
+        
 
 
 class BGStarPopulation(StarPopulation):
