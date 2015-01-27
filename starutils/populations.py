@@ -1102,6 +1102,8 @@ class ColormatchMultipleStarPopulation(TriplePopulation):
         colortol : float (optional)
             Tolerance within which to constrain color matching.
 
+        m1, age, feh : float, array_like, or ``Distribution``
+            Primary masses, age, and feh.  If float, those values are
             
             
         kwargs passed to MultipleStarPopulation
