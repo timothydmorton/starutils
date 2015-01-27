@@ -1096,11 +1096,13 @@ class ColormatchMultipleStarPopulation(TriplePopulation):
             Dictionary of magnitudes of total system.
 
         colors : list (optional)
-            Colors to use to constrain population generation.  e.g. ['JK'], or ['JK','gr'], etc.
+            Colors to use to constrain population generation.  
+            e.g. ['JK'], or ['JK','gr'], etc.
 
         colortol : float (optional)
             Tolerance within which to constrain color matching.
 
+            
             
         kwargs passed to MultipleStarPopulation
         """
