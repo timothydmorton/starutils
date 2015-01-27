@@ -8,6 +8,8 @@ import logging
 import re, os, os.path
 import numpy.random as rand
 
+import copy
+
 from astropy import units as u
 from astropy.units import Quantity
 from astropy.coordinates import SkyCoord
@@ -115,6 +117,33 @@ class StarPopulation(object):
         
         self._apply_all_constraints()
 
+
+    def append(self, other):
+        """Appends stars from another StarPopulations, in place.
+        """
+        if not isinstance(other,StarPopulation):
+            raise TypeError('Only StarPopulation objects can be appended to a StarPopulation.')
+        if not np.all(self.stars.columns == other.stars.columns):
+            raise ValueError('Two populations must have same columns to combine them.')
+
+        if len(self.constraints) > 0:
+            logging.warning('All constraints are cleared when appending another population.')
+            
+        self.stars = pd.concat((self.stars, other.stars))
+        
+        if hasattr(self,'orbpop'):
+            self.orbpop = self.orbpop + other.orbpop
+
+        #Clear all constraints that might exist
+        self.constraints = ConstraintDict()
+        self.hidden_constraints = ConstraintDict()
+        self.selectfrac_skip = []
+        self.distribution_skip = []
+
+        #apply constraints,  initializing the following attributes:
+        # self.distok, self.countok, self.selected, self.selectfrac
+        
+        self._apply_all_constraints()
 
     def __getitem__(self,prop):
         return self.selected[prop]
