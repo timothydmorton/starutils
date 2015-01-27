@@ -38,7 +38,7 @@ def get_trilegal(filename,ra,dec,folder='.',
         for col in df.columns:
             if col not in NONMAG_COLS:
                 df.rename(columns={col:'{}_mag'.format(col)},inplace=True)
-        if not m.search('\.h5$', filename):
+        if not re.search('\.h5$', filename):
             h5file = '{}/{}.h5'.format(folder,filename)
         else:
             h5file = '{}/{}'.format(folder,filename)
