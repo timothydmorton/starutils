@@ -966,10 +966,10 @@ class MultipleStarPopulation(TriplePopulation):
 
         Parameters
         ----------
-        m1 : float or array_like
-            Mass of primary star(s).  If array, then the simulation will be 
-            lots of individual systems; if float, then the simulation will be 
-            lots of realizations of one system.
+        m1 : float or array_like (optional)
+            Mass of primary star(s).  Default=1.  If array, then the simulation will be 
+            lots of individual systems; if float, then the simulation will be lots of 
+            realizations of one system.
 
         age, feh : float or array_like (optional)
             Age, feh of system(s).
@@ -999,6 +999,19 @@ class MultipleStarPopulation(TriplePopulation):
             be randomly generated according to generating functions.
             
         Additional keyword arguments passed to ``TriplePopulation``.
+
+
+        TODO: implement below, or not?
+
+        mags : dictionary (optional)
+            Dictionary of magnitudes of total system.
+
+        colors : list (optional)
+            Colors to use to constrain population generation.  e.g. ['JK'], or ['JK','gr'], etc.
+
+        colortol : float (optional)
+            Tolerance within which to constrain color matching.
+
         """
 
         if keywords is None:
@@ -1085,7 +1098,6 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
         """
 
         if m1 is None:
-            
 
 
 class BGStarPopulation(StarPopulation):
