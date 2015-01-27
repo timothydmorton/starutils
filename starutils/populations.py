@@ -15,7 +15,9 @@ from astropy.units import Quantity
 from astropy.coordinates import SkyCoord
 
 from orbitutils import OrbitPopulation,OrbitPopulation_FromH5
+from orbitutils import OrbitPopulation_FromDF
 from orbitutils import TripleOrbitPopulation, TripleOrbitPopulation_FromH5
+from orbitutils import TripleOrbitPopulation_FromDF
 from plotutils import setfig,plot2dhist
 
 from simpledist import distributions as dists
@@ -573,7 +575,8 @@ class StarPopulation_FromH5(StarPopulation):
                                   distribution_skip=dist_skip)
 
 class BinaryPopulation(StarPopulation):
-    def __init__(self,primary,secondary,
+    def __init__(self, stars=None,
+                 primary=None,secondary=None,
                  orbpop=None, period=None,
                  ecc=None,
                  is_single=None,
@@ -730,7 +733,8 @@ class VolumeLimitedPopulation(BinaryPopulation):
         distance_distribution = dists.PowerLaw_Distribution(2.,1,dmax) # p(d)~d^2
         distances = distance_distribution.rvs(n)
 
-        BinaryPopulation.__init__(self,primaries,secondaries,distances,**kwargs)
+        BinaryPopulation.__init__(self,primary=primaries,secondary=secondaries,
+                                  distance=distances, **kwargs)
 
         self.stars['is_binary'] = ~is_single
 
@@ -796,7 +800,7 @@ class Simulated_BinaryPopulation(BinaryPopulation):
         pri = ichrone(np.ones(n)*M, age, feh, return_df=True) #array typecast needed b/c of isochrones bug; fix at some point.
         sec = ichrone(M2, age, feh, return_df=True)
 
-        BinaryPopulation.__init__(self, pri, sec,
+        BinaryPopulation.__init__(self, primary=pri, secondary=sec,
                                   period=P, ecc=ecc, **kwargs)
 
 class Raghavan_BinaryPopulation(Simulated_BinaryPopulation):
@@ -870,7 +874,9 @@ class VolumeLimitedPopulation_FromH5(VolumeLimitedPopulation,BinaryPopulation_Fr
 
 
 class TriplePopulation(StarPopulation):
-    def __init__(self, primary, secondary, tertiary, 
+    def __init__(self, stars=None,
+                 primary=None, secondary=None, 
+                 tertiary=None, 
                  orbpop=None, 
                  period_short=None, period_long=None,
                  ecc_short=0, ecc_long=0,
@@ -885,7 +891,11 @@ class TriplePopulation(StarPopulation):
         
         Parameters
         ----------
-        primary, secondary, tertiary : ``pandas.DataFrame`` objects
+        stars : DataFrame, optional
+            Full stars DataFrame.  If not passed, then primary, secondary, 
+            and tertiary must be.
+
+        primary, secondary, tertiary : ``pandas.DataFrame`` objects, optional
             Properties of primary, secondary, and tertiary stars.
             These will get merged into a new ``stars`` attribute,
             with "_A", "_B", and "_C" tags.
@@ -903,19 +913,20 @@ class TriplePopulation(StarPopulation):
 
             
         """
-        assert len(primary)==len(secondary) and len(primary)==len(tertiary)
-        N = len(primary)
+        if stars is None:
+            assert len(primary)==len(secondary) and len(primary)==len(tertiary)
+            N = len(primary)
 
-        stars = pd.DataFrame()
+            stars = pd.DataFrame()
 
-        for c in primary.columns:
-            if re.search('_mag',c):
-                 stars[c] = addmags(primary[c],secondary[c],tertiary[c])
-            stars['{}_A'.format(c)] = primary[c]
-        for c in secondary.columns:
-            stars['{}_B'.format(c)] = secondary[c]
-        for c in tertiary.columns:
-            stars['{}_C'.format(c)] = tertiary[c]
+            for c in primary.columns:
+                if re.search('_mag',c):
+                     stars[c] = addmags(primary[c],secondary[c],tertiary[c])
+                stars['{}_A'.format(c)] = primary[c]
+            for c in secondary.columns:
+                stars['{}_B'.format(c)] = secondary[c]
+            for c in tertiary.columns:
+                stars['{}_C'.format(c)] = tertiary[c]
                
 
         ##For orbit population, stars 2 and 3 are in short orbit, and star 1 in long.
@@ -1032,9 +1043,6 @@ class MultipleStarPopulation(TriplePopulation):
 
         """
 
-        if keywords is None:
-            self.keywords = {}
-
         m1, m2, m3 = multmass_fn(m1, f_binary=f_binary,
                                  f_triple=f_triple,
                                  minq=minq, minmass=minmass,
@@ -1065,14 +1073,15 @@ class MultipleStarPopulation(TriplePopulation):
         ecc_short = draw_eccs(n, period_short)
         ecc_long = draw_eccs(n, period_long)
 
-        TriplePopulation.__init__(self, primary, secondary, tertiary,
+        TriplePopulation.__init__(self, primary=primary, 
+                                  secondary=secondary, tertiary=tertiary,
                                   orbpop=orbpop,
                                   period_short=period_short,
                                   period_long=period_long,
                                   ecc_short=ecc_short,
                                   ecc_long=ecc_long,**kwargs)
                         
-class ColormatchMultipleStarPopulation(MultipleStarPopulation):
+class ColormatchMultipleStarPopulation(TriplePopulation):
     def __init__(self, mags, colors=['JK'], colortol=0.1, 
                  m1=None, age=9.6, feh=0.0, n=1e5,
                  starfield=None, **kwargs):
@@ -1100,21 +1109,30 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
 
         self.starfield = starfield
 
-        if m1 is None:
-            if starfield is None:
-                raise ValueError('If masses are not provided, then starfield must be.')
-            df = pd.read_hdf(starfield,'df')
-            m1 = df['Mact']
-            age = df['logAge']
-            feh = df['[M/H]']
+        stars = pd.DataFrame()
+        df_long = pd.DataFrame()
+        df_short = pd.DataFrame()
+    
+        simkeywords = {}
+        while len(stars) < n:
 
-        MultipleStarPopulation.__init__(self, m1, age, feh)
+            if m1 is None:
+                if starfield is None:
+                    raise ValueError('If masses are not provided, then starfield must be.')
+                if type(starfield) == type(''):
+                    df = pd.read_hdf(starfield,'df',mode='r')
+                else:
+                    df = starfield
+                m1 = df['Mact']
+                age = df['logAge']
+                feh = df['[M/H]']
 
-        #if mags and colors provided, enforce that everything 
-        # matches given colors
-        cond = np.ones(n).astype(bool)
-        if mags is not None and colors is not None:
-            mags_tot = {}
+            pop = MultipleStarPopulation(m1, age, feh, n=n)
+
+
+            #if mags and colors provided, enforce that everything 
+            # matches given colors
+            cond = np.ones(n).astype(bool)
             for c in colors:
                 m = re.search('^(\w)(\w)$',c)                
                 if m:
@@ -1127,28 +1145,28 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
                         logging.warning('color {} ignored, either {} or {} mag is nan.'.format(c,b1,b2))
                         continue
 
-                    if b1 not in mags_tot:
-                        mags_tot[b1] = addmags(primary['{}_mag'.format(b1)],
-                                               secondary['{}_mag'.format(b1)],
-                                               tertiary['{}_mag'.format(b1)])
-                    if b2 not in mags_tot:
-                        mags_tot[b2] = addmags(primary['{}_mag'.format(b2)],
-                                               secondary['{}_mag'.format(b2)],
-                                               tertiary['{}_mag'.format(b2)])
-
                     obs_color = mags[b1] - mags[b2]
-                    keywords['{}-{}'.format(b1,b2)] = obs_color
+                    simkeywords['{}-{}'.format(b1,b2)] = obs_color
 
-                    mod_color = mags_tot[b1] - mags_tot[b2]
+                    mod_color = pop.stars['{}_mag'.format(b1)] - pop.stars['{}_mag'.format(b2)]
 
                     cmatch = np.absolute(mod_color - obs_color) < colortol
                     cond &= cmatch
                 else:
                     logging.warning('unrecognized color: {}'.format(c))
-
-
-
+            
+            stars = pd.concat((stars,pop.stars[cond]))
+            df_long = pd.concat((df_long, pop.orbpop.orbpop_long.dataframe[cond]))
+            df_short = pd.concat((df_short, pop.orbpop.orbpop_short.dataframe[cond]))
+            
+            logging.info('{} systems match color constraints')
         
+        stars = stars[:n]
+        df_long = df_long[:n]
+        df_short = df_short[:n]
+        orbpop = TripleOrbitPopulation_FromDF(df_long, df_short)
+        
+        TriplePopulation.__init__(self, stars=stars, orbpop=orbpop)
 
 
 class BGStarPopulation(StarPopulation):
