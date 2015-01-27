@@ -4,7 +4,7 @@ import logging
 import numpy as np
 import subprocess as sp
 import pandas as pd
-import os
+import os, re
 
 from astropy.units import UnitsError
 from astropy.coordinates import SkyCoord
