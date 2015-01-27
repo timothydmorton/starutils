@@ -954,7 +954,6 @@ class TriplePopulation(StarPopulation):
         
 class MultipleStarPopulation(TriplePopulation):
     def __init__(self, m1=1., age=9.6, feh=0.0,
-                 starfield=None,
                  f_binary=0.4, f_triple=0.12,
                  minq=0.1, minmass=0.11,
                  n=1e5, ichrone=DARTMOUTH,
@@ -962,17 +961,15 @@ class MultipleStarPopulation(TriplePopulation):
                  period_long_fn=draw_raghavan_periods,
                  period_short_fn=draw_msc_periods,
                  ecc_fn=draw_eccs,orbpop=None,
-                 mags=None, colors=None, colortol=0.1,
-                 keywords=None,
                  **kwargs):
         """A population of single, double, and triple stars, generated according to prescription.
 
         Parameters
         ----------
         m1 : float or array_like
-            Mass of primary star(s).  If array, then the simulation will be lots of individual
-            systems; if float, then the simulation will be lots of realizations of
-            one system.
+            Mass of primary star(s).  If array, then the simulation will be 
+            lots of individual systems; if float, then the simulation will be 
+            lots of realizations of one system.
 
         age, feh : float or array_like (optional)
             Age, feh of system(s).
@@ -1064,7 +1061,6 @@ class MultipleStarPopulation(TriplePopulation):
                     cond &= cmatch
                 else:
                     logging.warning('unrecognized color: {}'.format(c))
-            
 
 
         period_1 = period_long_fn(n)
@@ -1082,6 +1078,16 @@ class MultipleStarPopulation(TriplePopulation):
                                   ecc_short=ecc_short,
                                   ecc_long=ecc_long,**kwargs)
                         
+class ColormatchMultipleStarPopulation(MultipleStarPopulation):
+    def __init__(self, mags, colors=['JK'], colortol=0.1, 
+                 m1=None, starfield=None, **kwargs):
+        """Multiple star population constrained to match provided colors
+        """
+
+        if m1 is None:
+            
+
+
 class BGStarPopulation(StarPopulation):
     def __init__(self,stars,mags=None,maxrad=1800,density=None,name=''):
         """Background star population
