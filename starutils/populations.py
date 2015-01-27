@@ -35,6 +35,7 @@ from .trilegal import get_trilegal
 try:
     from isochrones.dartmouth import Dartmouth_Isochrone
     DARTMOUTH = Dartmouth_Isochrone()
+    DARTMOUTH.radius(1,9.6,0.0) #first call takes a long time for some reason
 except ImportError:
     logging.warning('isochrones package not installed; population simulations will not be fully functional')
     DARTMOUTH = None
@@ -1083,7 +1084,7 @@ class MultipleStarPopulation(TriplePopulation):
                         
 class ColormatchMultipleStarPopulation(TriplePopulation):
     def __init__(self, mags, colors=['JK'], colortol=0.1, 
-                 m1=None, age=9.6, feh=0.0, n=1e5,
+                 m1=None, age=9.6, feh=0.0, n=2e4,
                  starfield=None, **kwargs):
         """Multiple star population constrained to match provided colors
 
@@ -1100,9 +1101,12 @@ class ColormatchMultipleStarPopulation(TriplePopulation):
         colortol : float (optional)
             Tolerance within which to constrain color matching.
 
-
+            
+        kwargs passed to MultipleStarPopulation
         """
 
+        n = int(n)
+        
         self.mags = mags
         self.colors = colors
         self.colortol = colortol
@@ -1113,27 +1117,34 @@ class ColormatchMultipleStarPopulation(TriplePopulation):
         df_long = pd.DataFrame()
         df_short = pd.DataFrame()
     
+        if m1 is None:
+            if starfield is None:
+                raise ValueError('If masses are not provided, then starfield must be.')
+            if type(starfield) == type(''):
+                df = pd.read_hdf(starfield,'df',mode='r')
+            else:
+                df = starfield
+            m1 = np.array(df['Mact'])
+            age = np.array(df['logAge'])
+            feh = np.array(df['[M/H]'])
+        else:
+            #m1, age, and feh all need to be arrays, or such
+            # arrays must be created here.
+            pass
+
+
         simkeywords = {}
+        n_adapt = n
         while len(stars) < n:
 
-            if m1 is None:
-                if starfield is None:
-                    raise ValueError('If masses are not provided, then starfield must be.')
-                if type(starfield) == type(''):
-                    df = pd.read_hdf(starfield,'df',mode='r')
-                else:
-                    df = starfield
-                inds = np.random.randint(len(df),size=n)
-                m1 = df['Mact'][inds]
-                age = df['logAge'][inds]
-                feh = df['[M/H]'][inds]
-
-            pop = MultipleStarPopulation(m1, age, feh, n=n)
+            inds = np.random.randint(len(m1),size=n_adapt)
+            pop = MultipleStarPopulation(m1[inds], age[inds], feh[inds], n=n_adapt,
+                                         **kwargs)
 
 
             #if mags and colors provided, enforce that everything 
             # matches given colors
-            cond = np.ones(n).astype(bool)
+            cond = np.ones(n_adapt).astype(bool)
             for c in colors:
                 m = re.search('^(\w)(\w)$',c)                
                 if m:
@@ -1157,14 +1168,16 @@ class ColormatchMultipleStarPopulation(TriplePopulation):
                     logging.warning('unrecognized color: {}'.format(c))
             
             stars = pd.concat((stars,pop.stars[cond]))
+            n_adapt = min(int(1.2*(n-len(stars)) * n_adapt//cond.sum()), 3e5)
+            print(len(stars))
             df_long = pd.concat((df_long, pop.orbpop.orbpop_long.dataframe[cond]))
             df_short = pd.concat((df_short, pop.orbpop.orbpop_short.dataframe[cond]))
             
-            logging.info('{} systems match color constraints')
+            logging.info('{} systems match color constraints'.format(len(stars)))
         
-        stars = stars[:n]
-        df_long = df_long[:n]
-        df_short = df_short[:n]
+        stars = stars.iloc[:n]
+        df_long = df_long.iloc[:n]
+        df_short = df_short.iloc[:n]
         orbpop = TripleOrbitPopulation_FromDF(df_long, df_short)
         
         TriplePopulation.__init__(self, stars=stars, orbpop=orbpop)
