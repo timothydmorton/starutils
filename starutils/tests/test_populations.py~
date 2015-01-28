@@ -1,0 +1,14 @@
+from __future__ import print_function, division
+
+from starutils.populations import Raghavan_BinaryPopulation
+from starutils.populations import MultipleStarPopulation
+from starutils.populations import BGStarPopulation_TRILEGAL
+from starutils.populations import ColormatchMultipleStarPopulation
+
+def test_raghavan():
+    pop = Raghavan_BinaryPopulation(1, n=100)
+    pop.save_hdf('test_raghavan.h5', overwrite=True)
+    pop2 = Raghavan_BinaryPopulation().load_hdf('test_raghavan.h5')
+
+def test_multiple():
+    
