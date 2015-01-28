@@ -794,7 +794,7 @@ class Simulated_BinaryPopulation(BinaryPopulation):
         else:            
             self.generate(M, ichrone=ichrone)
 
-    def generate(self, M, ichrone=DARTMOUTH):
+    def generate(self, M, ichrone=DARTMOUTH, **kwargs):
         M2 = M * self.q_fn(n)
         P = self.P_fn(n)
         ecc = self.ecc_fn(n,P)
@@ -1057,13 +1057,13 @@ class MultipleStarPopulation(TriplePopulation):
 
         if stars is None and m1 is not None:
             self.generate(m1, age=age, feh=feh, n=n, ichrone=ichrone,
-                          orbpop=orbpop)
+                          orbpop=orbpop, **kwargs)
         else:
             TriplePopulation.__init__(self, stars=stars, orbpop=orbpop, **kwargs)
 
 
     def generate(self, m1, age=9.6, feh=0.0, n=1e5, ichrone=DARTMOUTH,
-                 orbpop=None)
+                 orbpop=None, **kwargs):
             m1, m2, m3 = self.multmass_fn(m1, f_binary=self.f_binary,
                                           f_triple=self.f_triple,
                                           minq=self.minq, minmass=self.minmass,
@@ -1164,7 +1164,7 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
         if mags is None:
             MultipleStarPopulation.__init__(self, **kwargs)
         else:
-            self.generate(n, m1=m1, age=age, feh=feh, n=n, **kwargs)
+            self.generate(m1=m1, age=age, feh=feh, n=n, **kwargs)
 
 
     def generate(self, m1=None, age=9.6, feh=0.0,
@@ -1412,7 +1412,7 @@ class BGStarPopulation_TRILEGAL(BGStarPopulation):
     def save_hdf(self,filename,path='', properties=None, **kwargs):
         if properties is None:
             properties = {}
-        properties['trilegal_args'] = self.trilegal_args}
+        properties['trilegal_args'] = self.trilegal_args
         BGStarPopulation.save_hdf(self,filename,path=path,
                                   properties=properties, **kwargs)
 
