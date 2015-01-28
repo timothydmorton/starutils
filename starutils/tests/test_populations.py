@@ -7,28 +7,28 @@ from starutils.populations import ColormatchMultipleStarPopulation
 
 import os
 
-def test_raghavan():
+def test_raghavan(filename='/tmp/test_raghavan.h5'):
     pop = Raghavan_BinaryPopulation(1, n=100)
-    pop.save_hdf('test_raghavan.h5', overwrite=True)
-    pop2 = Raghavan_BinaryPopulation().load_hdf('test_raghavan.h5')
-    os.remove('test_raghavan.h5')
+    pop.save_hdf(filename, overwrite=True)
+    pop2 = Raghavan_BinaryPopulation().load_hdf(filename)
+    os.remove(filename)
 
-def test_multiple():
+def test_multiple(filename='/tmp/test_multiple.h5'):
     pop = MultipleStarPopulation(1, n=100)
-    pop.save_hdf('test_multiple.h5', overwrite=True)
-    pop2 = MultipleStarPopulation().load_hdf('test_multiple.h5')
-    os.remove('test_multiple.h5')
+    pop.save_hdf(filename, overwrite=True)
+    pop2 = MultipleStarPopulation().load_hdf(filename)
+    os.remove(filename)
 
-def test_colormatch():
+def test_colormatch(filename='/tmp/test_colormatch.h5'):
     mags = {'H': 10.211, 'J': 10.523, 'K': 10.152000000000001} #Kepler-22
     pop = ColormatchMultipleStarPopulation(mags, m1=(1,0.1),
                                            age=(9.7,0.1),
                                            feh=(0,0.1), n=100)
-    pop.save_hdf('test_colormatch.h5', overwrite=True)
-    pop2 = ColormatchMultipleStarPopulation().load_hdf('test_colormatch.h5')    
-    os.remove('test_colormatch.h5')
+    pop.save_hdf(filename, overwrite=True)
+    pop2 = ColormatchMultipleStarPopulation().load_hdf(filename)    
+    os.remove(filename)
 
-#def test_bg():
+#def test_bg(filename): 
 #    ra, dec = (289.21749900000003, 47.884459999999997) #Kepler-22
 #    pop = BGStarPopulation_TRILEGAL('kepler22b.h5', ra, dec)
 #    pop.save_hdf('test_bg.h5', overwrite=True)
