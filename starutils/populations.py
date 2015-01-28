@@ -43,7 +43,7 @@ except ImportError:
 class StarPopulation(object):
     def __init__(self,stars,distance=None,
                  max_distance=1000*u.pc,convert_absmags=True,
-                 name='', orbpop=None):
+                 name='', orbpop=None, properties=None):
         """A population of stars.  Initialized with no constraints.
 
         stars : ``pandas`` ``DataFrame`` object
@@ -74,6 +74,10 @@ class StarPopulation(object):
         self.stars = stars.copy()
         self.orbpop = orbpop
         self.name = name
+        if properties is None:
+            self.properties = {}
+        else:
+            self.properties = properties
 
         N = len(self.stars)
 
@@ -701,9 +705,10 @@ class BinaryPopulation(StarPopulation):
         dist = self.rsky_distribution(**kwargs)
         return dist(rsky)
 
-    def save_hdf(self,filename,path=''):
-        self.orbpop.save_hdf(filename,path='{}/orbpop'.format(path))
-        StarPopulation.save_hdf(self,filename,path=path)
+    def save_hdf(self,filename,path='',properties=None):
+        if properties is None:
+            properties = {}
+        StarPopulation.save_hdf(self,filename,path=path, properties=properties)
 
 class VolumeLimitedPopulation(BinaryPopulation):
     def __init__(self, m1, dmax, n=1e5, binary_fraction=0.4,
@@ -1182,7 +1187,7 @@ class ColormatchMultipleStarPopulation(TriplePopulation):
                 feh = feh*np.ones(1)
 
 
-        simkeywords = {}
+        simkeywords = {} #note this as property to save in save_hdf...
         n_adapt = n
         while len(stars) < n:
 
