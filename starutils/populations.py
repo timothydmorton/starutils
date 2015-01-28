@@ -43,7 +43,7 @@ except ImportError:
 class StarPopulation(object):
     def __init__(self,stars,distance=None,
                  max_distance=1000*u.pc,convert_absmags=True,
-                 name='', orbpop=None, properties=None):
+                 name='', orbpop=None):
         """A population of stars.  Initialized with no constraints.
 
         stars : ``pandas`` ``DataFrame`` object
@@ -74,10 +74,6 @@ class StarPopulation(object):
         self.stars = stars.copy()
         self.orbpop = orbpop
         self.name = name
-        if properties is None:
-            self.properties = {}
-        else:
-            self.properties = properties
 
         N = len(self.stars)
 
@@ -539,6 +535,11 @@ class StarPopulation(object):
         return df
 
     def save_hdf(self,filename,path='',properties=None):
+        """Saves to .h5 file.
+
+        Subclasses should define a save_hdf that passes
+        the appropriate properties to reconstruct the object.
+        """
         if properties is None:
             properties = {}
         self.stars.to_hdf(filename,'{}/stars'.format(path))
@@ -559,7 +560,46 @@ class StarPopulation(object):
 
     def load_hdf(self, filename, path=''):
         """Loads data from .h5 file
+
+        Correct properties should be restored to object.
         """
+        stars = pd.read_hdf(filename,path+'/stars', auto_close=True)
+        constraint_df = pd.read_hdf(filename,path+'/constraints', auto_close=True)
+
+        store = pd.HDFStore(filename)
+        has_orbpop = '{}/orbpop/df'.format(path) in store
+        has_triple_orbpop = '{}/orbpop/long/df'.format(path) in store
+        attrs = store.get_storer('{}/stars'.format(path)).attrs
+        distribution_skip = attrs.distribution_skip
+        selectfrac_skip = attrs.selectfrac_skip
+        name = attrs.name
+        poptype = attrs.poptype
+        for kw,val in attrs.properties.items():
+            setattr(self,kw,val)
+        store.close()
+
+        #load orbpop if there
+        orbpop = None
+        if has_orbpop:
+            orbpop = OrbitPopulation_FromH5(filename, path=path+'/orbpop')
+        elif has_triple_orbpop:
+            orbpop = TripleOrbitPopulation_FromH5(filename, path=path+'/orbpop')
+
+        self.stars = stars
+        self.orbpop = orbpop
+
+        #self.poptype = poptype
+        #StarPopulation.__init__(self,stars,name=name, orbpop=orbpop)
+
+        for n in constraint_df.columns:
+            mask = np.array(constraint_df[n])
+            c = Constraint(mask,name=n)
+            sel_skip = n in selectfrac_skip
+            dist_skip = n in distribution_skip
+            self.apply_constraint(c,selectfrac_skip=sel_skip,
+                                  distribution_skip=dist_skip)
+
+        return self
 
 class StarPopulation_FromH5(StarPopulation):
     def __init__(self,filename,path=''):
