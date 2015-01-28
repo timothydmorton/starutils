@@ -1135,15 +1135,22 @@ class ColormatchMultipleStarPopulation(TriplePopulation):
         else:
             #m1, age, and feh all need to be arrays, or such
             # arrays must be created here.
+            if type(m1) is type((1,)):
+                m1 = dists.Gaussian_Distribution(*m1)
+            if type(age) is type((1,)):
+                age = dists.Gaussian_Distribution(*age)
+            if type(feh) is type((1,)):
+                feh = dists.Gaussian_Distribution(*feh)
+
             if isinstance(m1, dists.Distribution):
                 m1dist = m1
-                m1 = m1dist.rvs(1e6)
+                m1 = m1dist.rvs(1e5)
             if isinstance(age, dists.Distribution):
                 agedist = age
-                age = agedist.rvs(1e6)
+                age = agedist.rvs(1e5)
             if isinstance(feh, dists.Distribution):
                 fehdist = feh
-                feh = fehdist.rvs(1e6)
+                feh = fehdist.rvs(1e5)
 
             if np.size(m1)==1:
                 m1 = m1*np.ones(1)
