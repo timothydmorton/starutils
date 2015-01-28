@@ -557,12 +557,12 @@ class StarPopulation_FromH5(StarPopulation):
     def __init__(self,filename,path=''):
         """Loads in a StarPopulation saved to .h5
         """
-        stars = pd.read_hdf(filename,path+'/stars', mode='r')
-        constraint_df = pd.read_hdf(filename,path+'/constraints', mode='r')
+        stars = pd.read_hdf(filename,path+'/stars', auto_close=True)
+        constraint_df = pd.read_hdf(filename,path+'/constraints', auto_close=True)
 
         store = pd.HDFStore(filename)
         has_orbpop = '{}/orbpop/df'.format(path) in store
-        has_triple_orbpop = '{}/orbpop/long/df' in store
+        has_triple_orbpop = '{}/orbpop/long/df'.format(path) in store
         attrs = store.get_storer('{}/stars'.format(path)).attrs
         distribution_skip = attrs.distribution_skip
         selectfrac_skip = attrs.selectfrac_skip
@@ -1148,7 +1148,7 @@ class ColormatchMultipleStarPopulation(TriplePopulation):
             if starfield is None:
                 raise ValueError('If masses are not provided, then starfield must be.')
             if type(starfield) == type(''):
-                df = pd.read_hdf(starfield,'df',mode='r')
+                df = pd.read_hdf(starfield,'df', auto_close=True)
             else:
                 df = starfield
             m1 = np.array(df['Mact'])
@@ -1335,12 +1335,12 @@ class BGStarPopulation_TRILEGAL(BGStarPopulation):
             basefilename = m.group(1)
 
         try:
-            stars = pd.read_hdf(h5filename,'df', mode='r')
+            stars = pd.read_hdf(h5filename,'df', auto_close=True)
         except:
             if ra is None or dec is None:
                 raise ValueError('Must provide ra,dec if simulation file does not already exist.')
             get_trilegal(basefilename,ra,dec,**kwargs)
-            stars = pd.read_hdf(h5filename,'df', mode='r')
+            stars = pd.read_hdf(h5filename,'df', auto_close=True)
         store = pd.HDFStore(h5filename)
         self.trilegal_args = store.get_storer('df').attrs.trilegal_args
         store.close()
