@@ -44,6 +44,9 @@ def draw_pers_eccs(n,**kwargs):
     eccs = draw_eccs(n,pers,**kwargs)
     return pers,eccs
 
+def flat_massratio(n, qmin=0.1, qmax=1.):
+    return rand.uniform(size=n)*(qmax - qmin) + qmin
+
 def flat_massratio_fn(qmin=0.1,qmax=1.):
     def fn(n):
         return rand.uniform(size=n)*(qmax - qmin) + qmin

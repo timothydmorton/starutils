@@ -27,7 +27,7 @@ from .constraints import ConstraintDict,MeasurementConstraint,RangeConstraint
 from .constraints import ContrastCurveConstraint,VelocityContrastCurveConstraint
 
 from .utils import randpos_in_circle, draw_raghavan_periods, draw_msc_periods, draw_eccs
-from .utils import flat_massratio_fn, mult_masses
+from .utils import flat_massratio, mult_masses
 from .utils import distancemodulus, addmags, dfromdm
 
 from .trilegal import get_trilegal
@@ -663,9 +663,10 @@ class BinaryPopulation(StarPopulation):
 
         """
 
-        assert len(primary)==len(secondary)
 
         if stars is None and primary is not None:
+            assert len(primary)==len(secondary)
+
             stars = pd.DataFrame()
 
             for c in primary.columns:
@@ -678,14 +679,14 @@ class BinaryPopulation(StarPopulation):
             stars['q'] = stars['mass_B']/stars['mass_A']
 
 
-        if orbpop is None:
-            if period is None:
-                period = draw_raghavan_periods(len(secondary))
-            if ecc is None:
-                ecc = draw_eccs(len(secondary),period)
-            orbpop = OrbitPopulation(primary['mass'],
-                                     secondary['mass'],
-                                     period,ecc)
+            if orbpop is None:
+                if period is None:
+                    period = draw_raghavan_periods(len(secondary))
+                if ecc is None:
+                    ecc = draw_eccs(len(secondary),period)
+                orbpop = OrbitPopulation(primary['mass'],
+                                         secondary['mass'],
+                                         period,ecc)
 
         StarPopulation.__init__(self,stars=stars,orbpop=orbpop,**kwargs)
 
@@ -745,8 +746,8 @@ class BinaryPopulation(StarPopulation):
         
 class Simulated_BinaryPopulation(BinaryPopulation):
     def __init__(self,M=None,q_fn=None,P_fn=None,ecc_fn=None,
-                 n=1e4,ichrone=DARTMOUTH,
-                 age=9.5,feh=0.0, minmass=0.12, **kwargs):
+                 n=1e4,ichrone=DARTMOUTH, qmin=0.1,
+                 age=9.6,feh=0.0, minmass=0.12, **kwargs):
         """Simulates BinaryPopulation according to provide primary mass(es), generating functions, and stellar isochrone models.
 
         Parameters
@@ -784,18 +785,20 @@ class Simulated_BinaryPopulation(BinaryPopulation):
         minmass : float
             Minimum mass to simulate
         """
-        self.q_fn = qfn
-        self.P_fn = Pfn
+        self.q_fn = q_fn
+        self.qmin = qmin
+        self.P_fn = P_fn
         self.ecc_fn = ecc_fn
         self.minmass = minmass
         
         if M is None:
             BinaryPopulation.__init__(self) #empty
         else:            
-            self.generate(M, ichrone=ichrone)
+            self.generate(M, age=age, feh=feh, ichrone=ichrone, n=n)
 
-    def generate(self, M, ichrone=DARTMOUTH, **kwargs):
-        M2 = M * self.q_fn(n)
+    def generate(self, M, age=9.6, feh=0.0,
+                 ichrone=DARTMOUTH, n=1e4, **kwargs):
+        M2 = M * self.q_fn(n, qmin=max(self.qmin,self.minmass/M))
         P = self.P_fn(n)
         ecc = self.ecc_fn(n,P)
 
@@ -811,11 +814,11 @@ class Simulated_BinaryPopulation(BinaryPopulation):
         if properties is None:
             properties = {}
 
-        for prop in ['q_fn', 'P_fn', 'ecc_fn', 'minmass']:
+        for prop in ['q_fn', 'qmin', 'P_fn', 'ecc_fn', 'minmass']:
             properties[prop] = getattr(self, prop)
             
         BinaryPopulation.save_hdf(self, filename, path=path,
-                                  properties=propeties, **kwargs)
+                                  properties=properties, **kwargs)
 
 
 class Raghavan_BinaryPopulation(Simulated_BinaryPopulation):
@@ -851,9 +854,10 @@ class Raghavan_BinaryPopulation(Simulated_BinaryPopulation):
 
         q_fn : function
             A function that returns random mass ratios.  Defaults to flat
-            down to provided minimum mass.  Must be called as follows::
+            down to provided minimum mass.  Must be able to be called as 
+            follows::
             
-                qs = q_fn(n)
+                qs = q_fn(n, qmin, qmax)
 
             to provide ``n`` random mass ratios.
 
@@ -861,14 +865,15 @@ class Raghavan_BinaryPopulation(Simulated_BinaryPopulation):
         """
         if M is not None:
             if q_fn is None:
-                q_fn = flat_massratio_fn(qmin=max(qmin,minmass/M))
+                q_fn = flat_massratio
 
             if e_M != 0:
                 M = stats.norm(M,e_M).rvs(n)
 
-        Simulated_BinaryPopulation.__init__(self, M, q_fn,
-                                            draw_raghavan_periods,
-                                            draw_eccs, n=n,
+        Simulated_BinaryPopulation.__init__(self, M=M, q_fn=q_fn,
+                                            P_fn=draw_raghavan_periods,
+                                            ecc_fn=draw_eccs, n=n,
+                                            qmin=qmin,
                                             ichrone=ichrone,
                                             age=age, feh=feh,
                                             minmass=minmass, **kwargs)
@@ -997,7 +1002,7 @@ class MultipleStarPopulation(TriplePopulation):
     def __init__(self, m1=None, age=9.6, feh=0.0,
                  f_binary=0.4, f_triple=0.12,
                  minq=0.1, minmass=0.11,
-                 n=1e5, ichrone=DARTMOUTH,
+                 n=1e4, ichrone=DARTMOUTH,
                  multmass_fn=mult_masses,
                  period_long_fn=draw_raghavan_periods,
                  period_short_fn=draw_msc_periods,
@@ -1249,11 +1254,9 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
 
             stars = pd.concat((stars,pop.stars[cond]))
             n_adapt = min(int(1.2*(n-len(stars)) * n_adapt//cond.sum()), 3e5)
-            print(len(stars))
+            logging.info('{} systems simulated.'.format(len(stars)))
             df_long = pd.concat((df_long, pop.orbpop.orbpop_long.dataframe[cond]))
             df_short = pd.concat((df_short, pop.orbpop.orbpop_short.dataframe[cond]))
-
-            logging.info('{} systems match color constraints'.format(len(stars)))
 
         stars = stars.iloc[:n]
         df_long = df_long.iloc[:n]
