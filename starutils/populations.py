@@ -1103,7 +1103,8 @@ class ColormatchMultipleStarPopulation(TriplePopulation):
             Tolerance within which to constrain color matching.
 
         m1, age, feh : float, array_like, or ``Distribution``
-            Primary masses, age, and feh.  If float, those values are
+            Primary masses, age, and feh.  If float or array_like, 
+            those values are used; if distributions, they are resampled.
             
             
         kwargs passed to MultipleStarPopulation
@@ -1134,7 +1135,22 @@ class ColormatchMultipleStarPopulation(TriplePopulation):
         else:
             #m1, age, and feh all need to be arrays, or such
             # arrays must be created here.
-            pass
+            if isinstance(m1, dists.Distribution):
+                m1dist = m1
+                m1 = m1dist.rvs(1e6)
+            if isinstance(age, dists.Distribution):
+                agedist = age
+                age = agedist.rvs(1e6)
+            if isinstance(feh, dists.Distribution):
+                fehdist = feh
+                feh = fehdist.rvs(1e6)
+
+            if np.size(m1)==1:
+                m1 = m1*np.ones(1)
+            if np.size(age)==1:
+                m1 = age*np.ones(1)
+            if np.size(feh)==1:
+                feh = feh*np.ones(1)
 
 
         simkeywords = {}
