@@ -41,7 +41,7 @@ except ImportError:
     DARTMOUTH = None
 
 class StarPopulation(object):
-    def __init__(self,stars,distance=None,
+    def __init__(self,stars=None,distance=None,
                  max_distance=1000*u.pc,convert_absmags=True,
                  name='', orbpop=None):
         """A population of stars.  Initialized with no constraints.
@@ -71,44 +71,47 @@ class StarPopulation(object):
             has a distance column.
 
         """
-        self.stars = stars.copy()
         self.orbpop = orbpop
         self.name = name
 
-        N = len(self.stars)
+        if stars is None:
+            self.stars = None
+        else:
+            self.stars = stars.copy()
+            N = len(self.stars)
 
-        #if stars does not have a 'distance' column already, then
-        # we define distances based on the provided arguments,
-        # and covert absolute magnitudes into apparent (unless explicitly
-        # forbidden from doing so by 'convert_absmags' being set
-        # to False).
-        
-        if 'distance' not in self.stars:
-            if type(max_distance) != Quantity:
-                max_distance = max_distance * u.pc
+            #if stars does not have a 'distance' column already, then
+            # we define distances based on the provided arguments,
+            # and covert absolute magnitudes into apparent (unless explicitly
+            # forbidden from doing so by 'convert_absmags' being set
+            # to False).
 
-
-            if distance is None:
-                #generate random distances
-                dmax = max_distance.to('pc').value
-                distance_distribution = dists.PowerLaw_Distribution(2.,1,dmax) # p(d)~d^2
-                distance = distance_distribution.rvs(N)
-
-            if type(distance) != Quantity:
-                distance = distance * u.pc
-
-            distmods = distancemodulus(distance)
-            if convert_absmags:
-                for col in self.stars.columns:
-                    if re.search('_mag',col):
-                        self.stars[col] += distmods
-
-            self.stars['distance'] = distance
-            self.stars['distmod'] = distmods
+            if 'distance' not in self.stars:
+                if type(max_distance) != Quantity:
+                    max_distance = max_distance * u.pc
 
 
-        if 'distmod' not in self.stars:
-            self.stars['distmod'] = distancemodulus(self.stars['distance'])
+                if distance is None:
+                    #generate random distances
+                    dmax = max_distance.to('pc').value
+                    distance_distribution = dists.PowerLaw_Distribution(2.,1,dmax) # p(d)~d^2
+                    distance = distance_distribution.rvs(N)
+
+                if type(distance) != Quantity:
+                    distance = distance * u.pc
+
+                distmods = distancemodulus(distance)
+                if convert_absmags:
+                    for col in self.stars.columns:
+                        if re.search('_mag',col):
+                            self.stars[col] += distmods
+
+                self.stars['distance'] = distance
+                self.stars['distmod'] = distmods
+
+
+            if 'distmod' not in self.stars:
+                self.stars['distmod'] = distancemodulus(self.stars['distance'])
 
         #initialize empty constraint list
         self.constraints = ConstraintDict()
@@ -563,8 +566,8 @@ class StarPopulation(object):
 
         Correct properties should be restored to object.
         """
-        stars = pd.read_hdf(filename,path+'/stars', auto_close=True)
-        constraint_df = pd.read_hdf(filename,path+'/constraints', auto_close=True)
+        stars = pd.read_hdf(filename,path+'/stars', autoclose=True)
+        constraint_df = pd.read_hdf(filename,path+'/constraints', autoclose=True)
 
         store = pd.HDFStore(filename)
         has_orbpop = '{}/orbpop/df'.format(path) in store
@@ -605,8 +608,8 @@ class StarPopulation_FromH5(StarPopulation):
     def __init__(self,filename,path=''):
         """Loads in a StarPopulation saved to .h5
         """
-        stars = pd.read_hdf(filename,path+'/stars', auto_close=True)
-        constraint_df = pd.read_hdf(filename,path+'/constraints', auto_close=True)
+        stars = pd.read_hdf(filename,path+'/stars', autoclose=True)
+        constraint_df = pd.read_hdf(filename,path+'/constraints', autoclose=True)
 
         store = pd.HDFStore(filename)
         has_orbpop = '{}/orbpop/df'.format(path) in store
@@ -1127,7 +1130,7 @@ class ColormatchMultipleStarPopulation(TriplePopulation):
             if starfield is None:
                 raise ValueError('If masses are not provided, then starfield must be.')
             if type(starfield) == type(''):
-                df = pd.read_hdf(starfield,'df', auto_close=True)
+                df = pd.read_hdf(starfield,'df', autoclose=True)
             else:
                 df = starfield
             m1 = np.array(df['Mact'])
@@ -1314,12 +1317,12 @@ class BGStarPopulation_TRILEGAL(BGStarPopulation):
             basefilename = m.group(1)
 
         try:
-            stars = pd.read_hdf(h5filename,'df', auto_close=True)
+            stars = pd.read_hdf(h5filename,'df', autoclose=True)
         except:
             if ra is None or dec is None:
                 raise ValueError('Must provide ra,dec if simulation file does not already exist.')
             get_trilegal(basefilename,ra,dec,**kwargs)
-            stars = pd.read_hdf(h5filename,'df', auto_close=True)
+            stars = pd.read_hdf(h5filename,'df', autoclose=True)
         store = pd.HDFStore(h5filename)
         self.trilegal_args = store.get_storer('df').attrs.trilegal_args
         store.close()
