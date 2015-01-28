@@ -1,7 +1,7 @@
 from setuptools import setup, Extension, find_packages
 from Cython.Build import cythonize
 from Cython.Distutils import build_ext
-import os, import sys
+import os, sys
 
 def readme():
     with open('README.rst') as f:
