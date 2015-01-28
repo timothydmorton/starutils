@@ -557,6 +557,10 @@ class StarPopulation(object):
         attrs.properties = properties
         store.close()
 
+    def load_hdf(self, filename, path=''):
+        """Loads data from .h5 file
+        """
+
 class StarPopulation_FromH5(StarPopulation):
     def __init__(self,filename,path=''):
         """Loads in a StarPopulation saved to .h5
