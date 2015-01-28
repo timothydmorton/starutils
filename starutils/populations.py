@@ -43,7 +43,7 @@ except ImportError:
 class StarPopulation(object):
     def __init__(self,stars,distance=None,
                  max_distance=1000*u.pc,convert_absmags=True,
-                 name=''):
+                 name='', orbpop=None):
         """A population of stars.  Initialized with no constraints.
 
         stars : ``pandas`` ``DataFrame`` object
@@ -72,6 +72,7 @@ class StarPopulation(object):
 
         """
         self.stars = stars.copy()
+        self.orbpop = orbpop
         self.name = name
 
         N = len(self.stars)
@@ -539,6 +540,10 @@ class StarPopulation(object):
         self.stars.to_hdf(filename,'{}/stars'.format(path))
         self.constraint_df.to_hdf(filename,'{}/constraints'.format(path))
 
+        #save orbpop, if exists
+        if hasattr(self, 'orbpop'):
+            self.orbpop.save_hdf(filename, path=path+'/orbpop')
+
         store = pd.HDFStore(filename)
         attrs = store.get_storer('{}/stars'.format(path)).attrs
         attrs.selectfrac_skip = self.selectfrac_skip
@@ -554,7 +559,10 @@ class StarPopulation_FromH5(StarPopulation):
         """
         stars = pd.read_hdf(filename,path+'/stars', mode='r')
         constraint_df = pd.read_hdf(filename,path+'/constraints', mode='r')
+
         store = pd.HDFStore(filename)
+        has_orbpop = '{}/orbpop/df'.format(path) in store
+        has_triple_orbpop = '{}/orbpop/long/df' in store
         attrs = store.get_storer('{}/stars'.format(path)).attrs
         distribution_skip = attrs.distribution_skip
         selectfrac_skip = attrs.selectfrac_skip
@@ -564,8 +572,15 @@ class StarPopulation_FromH5(StarPopulation):
             setattr(self,kw,val)
         store.close()
 
+        #load orbpop if there
+        orbpop = None
+        if has_orbpop:
+            orbpop = OrbitPopulation_FromH5(filename, path=path+'/orbpop')
+        elif has_triple_orbpop:
+            orbpop = TripleOrbitPopulation_FromH5(filename, path=path+'/orbpop')
+
         self.poptype = poptype
-        StarPopulation.__init__(self,stars,name)
+        StarPopulation.__init__(self,stars,name=name, orbpop=orbpop)
 
         for n in constraint_df.columns:
             mask = np.array(constraint_df[n])
@@ -630,13 +645,11 @@ class BinaryPopulation(StarPopulation):
                 period = draw_raghavan_periods(len(secondary))
             if ecc is None:
                 ecc = draw_eccs(len(secondary),period)
-            self.orbpop = OrbitPopulation(primary['mass'],
-                                          secondary['mass'],
-                                          period,ecc)
-        else:
-            self.orbpop = orbpop
+            orbpop = OrbitPopulation(primary['mass'],
+                                     secondary['mass'],
+                                     period,ecc)
 
-        StarPopulation.__init__(self,stars,**kwargs)
+        StarPopulation.__init__(self,stars,orbpop=orbpop,**kwargs)
 
 
     @property
@@ -956,12 +969,10 @@ class TriplePopulation(StarPopulation):
             M2 = stars['mass_B']
             M3 = stars['mass_C']
 
-            self.orbpop = TripleOrbitPopulation(M1,M2,M3,period_long,period_short,
-                                                ecclong=ecc_long, eccshort=ecc_short)
-        else:
-            self.orbpop = orbpop
+            orbpop = TripleOrbitPopulation(M1,M2,M3,period_long,period_short,
+                                           ecclong=ecc_long, eccshort=ecc_short)
 
-        StarPopulation.__init__(self,stars,**kwargs)
+        StarPopulation.__init__(self,stars, orbpop=orbpop, **kwargs)
 
     @property
     def singles(self):
@@ -992,6 +1003,8 @@ class TriplePopulation(StarPopulation):
             return frac, frac/np.sqrt(ntriples)
         else:
             return frac
+
+
         
 class MultipleStarPopulation(TriplePopulation):
     def __init__(self, m1=1., age=9.6, feh=0.0,
