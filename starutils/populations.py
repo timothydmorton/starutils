@@ -155,6 +155,9 @@ class StarPopulation(object):
     def __getitem__(self,prop):
         return self.selected[prop]
 
+    def generate(self, *args, **kwargs):
+        raise NotImplementedError
+
     @property
     def magnitudes(self):
         bands = []
@@ -200,19 +203,26 @@ class StarPopulation(object):
         ``self.selected``, and ``self.selectfrac`` attributes.
         """
 
-        n = len(self.stars)
-        self.distok = np.ones(len(self.stars)).astype(bool)
-        self.countok = np.ones(len(self.stars)).astype(bool)
+        if not hasattr(self, 'constraints'):
+            self.constraints = ConstraintDict()
+            self.hidden_constraints = ConstraintDict()
+            self.selectfrac_skip = []
+            self.distribution_skip = []
+            
+        if self.stars is not None:
+            n = len(self.stars)
+            self.distok = np.ones(len(self.stars)).astype(bool)
+            self.countok = np.ones(len(self.stars)).astype(bool)
 
-        for name in self.constraints:
-            c = self.constraints[name]
-            if c.name not in self.distribution_skip:
-                self.distok &= c.ok
-            if c.name not in self.selectfrac_skip:
-                self.countok &= c.ok
+            for name in self.constraints:
+                c = self.constraints[name]
+                if c.name not in self.distribution_skip:
+                    self.distok &= c.ok
+                if c.name not in self.selectfrac_skip:
+                    self.countok &= c.ok
 
-        self.selected = self.stars[self.distok]
-        self.selectfrac = self.countok.sum()/n
+            self.selected = self.stars[self.distok]
+            self.selectfrac = self.countok.sum()/n
 
 
     def prophist2d(self,propx,propy,
@@ -579,10 +589,17 @@ class StarPopulation(object):
         has_orbpop = '{}/orbpop/df'.format(path) in store
         has_triple_orbpop = '{}/orbpop/long/df'.format(path) in store
         attrs = store.get_storer('{}/stars'.format(path)).attrs
+
+        #check that saved file is the right type
+        poptype = attrs.poptype
+        if poptype != type(self):
+            raise TypeError('Saved population is {}.  Please instantiate proper class before loading.'.format(poptype))
+
+
         distribution_skip = attrs.distribution_skip
         selectfrac_skip = attrs.selectfrac_skip
         name = attrs.name
-        poptype = attrs.poptype
+
         for kw,val in attrs.properties.items():
             setattr(self,kw,val)
         store.close()
@@ -597,8 +614,6 @@ class StarPopulation(object):
         self.stars = stars
         self.orbpop = orbpop
 
-        #self.poptype = poptype
-        #StarPopulation.__init__(self,stars,name=name, orbpop=orbpop)
 
         for n in constraint_df.columns:
             mask = np.array(constraint_df[n])
@@ -607,45 +622,10 @@ class StarPopulation(object):
             dist_skip = n in distribution_skip
             self.apply_constraint(c,selectfrac_skip=sel_skip,
                                   distribution_skip=dist_skip)
+
+        self._apply_all_constraints()
 
         return self
-
-class StarPopulation_FromH5(StarPopulation):
-    def __init__(self,filename,path=''):
-        """Loads in a StarPopulation saved to .h5
-        """
-        stars = pd.read_hdf(filename,path+'/stars', autoclose=True)
-        constraint_df = pd.read_hdf(filename,path+'/constraints', autoclose=True)
-
-        store = pd.HDFStore(filename)
-        has_orbpop = '{}/orbpop/df'.format(path) in store
-        has_triple_orbpop = '{}/orbpop/long/df'.format(path) in store
-        attrs = store.get_storer('{}/stars'.format(path)).attrs
-        distribution_skip = attrs.distribution_skip
-        selectfrac_skip = attrs.selectfrac_skip
-        name = attrs.name
-        poptype = attrs.poptype
-        for kw,val in attrs.properties.items():
-            setattr(self,kw,val)
-        store.close()
-
-        #load orbpop if there
-        orbpop = None
-        if has_orbpop:
-            orbpop = OrbitPopulation_FromH5(filename, path=path+'/orbpop')
-        elif has_triple_orbpop:
-            orbpop = TripleOrbitPopulation_FromH5(filename, path=path+'/orbpop')
-
-        self.poptype = poptype
-        StarPopulation.__init__(self,stars,name=name, orbpop=orbpop)
-
-        for n in constraint_df.columns:
-            mask = np.array(constraint_df[n])
-            c = Constraint(mask,name=n)
-            sel_skip = n in selectfrac_skip
-            dist_skip = n in distribution_skip
-            self.apply_constraint(c,selectfrac_skip=sel_skip,
-                                  distribution_skip=dist_skip)
 
 class BinaryPopulation(StarPopulation):
     def __init__(self, stars=None,
@@ -685,16 +665,17 @@ class BinaryPopulation(StarPopulation):
 
         assert len(primary)==len(secondary)
 
-        stars = pd.DataFrame()
+        if stars is None and primary is not None:
+            stars = pd.DataFrame()
 
-        for c in primary.columns:
-            if re.search('_mag',c):
-                stars[c] = addmags(primary[c],secondary[c])
-            stars['{}_A'.format(c)] = primary[c]
-        for c in secondary.columns:
-            stars['{}_B'.format(c)] = secondary[c]            
-            
-        stars['q'] = stars['mass_B']/stars['mass_A']
+            for c in primary.columns:
+                if re.search('_mag',c):
+                    stars[c] = addmags(primary[c],secondary[c])
+                stars['{}_A'.format(c)] = primary[c]
+            for c in secondary.columns:
+                stars['{}_B'.format(c)] = secondary[c]            
+
+            stars['q'] = stars['mass_B']/stars['mass_A']
 
 
         if orbpop is None:
@@ -706,7 +687,7 @@ class BinaryPopulation(StarPopulation):
                                      secondary['mass'],
                                      period,ecc)
 
-        StarPopulation.__init__(self,stars,orbpop=orbpop,**kwargs)
+        StarPopulation.__init__(self,stars=stars,orbpop=orbpop,**kwargs)
 
 
     @property
@@ -763,7 +744,8 @@ class BinaryPopulation(StarPopulation):
 
         
 class Simulated_BinaryPopulation(BinaryPopulation):
-    def __init__(self,M,q_fn,P_fn,ecc_fn,n=1e4,ichrone=DARTMOUTH,
+    def __init__(self,M=None,q_fn=None,P_fn=None,ecc_fn=None,
+                 n=1e4,ichrone=DARTMOUTH,
                  age=9.5,feh=0.0, minmass=0.12, **kwargs):
         """Simulates BinaryPopulation according to provide primary mass(es), generating functions, and stellar isochrone models.
 
@@ -798,20 +780,46 @@ class Simulated_BinaryPopulation(BinaryPopulation):
 
         age,feh : float or array-like
             log(age) and metallicity at which to simulate population.
+
+        minmass : float
+            Minimum mass to simulate
         """
-        M2 = M * q_fn(n)
-        P = P_fn(n)
-        ecc = ecc_fn(n,P)
+        self.q_fn = qfn
+        self.P_fn = Pfn
+        self.ecc_fn = ecc_fn
+        self.minmass = minmass
+        
+        if M is None:
+            BinaryPopulation.__init__(self) #empty
+        else:            
+            self.generate(M, ichrone=ichrone)
 
+    def generate(self, M, ichrone=DARTMOUTH):
+        M2 = M * self.q_fn(n)
+        P = self.P_fn(n)
+        ecc = self.ecc_fn(n,P)
 
-        pri = ichrone(np.ones(n)*M, age, feh, return_df=True) #array typecast needed b/c of isochrones bug; fix at some point.
+        pri = ichrone(np.ones(n)*M, age, feh, return_df=True)
         sec = ichrone(M2, age, feh, return_df=True)
-
+        
         BinaryPopulation.__init__(self, primary=pri, secondary=sec,
                                   period=P, ecc=ecc, **kwargs)
+        return self
+
+
+    def save_hdf(self, filename, path='', properties=None, **kwargs):
+        if properties is None:
+            properties = {}
+
+        for prop in ['q_fn', 'P_fn', 'ecc_fn', 'minmass']:
+            properties[prop] = getattr(self, prop)
+            
+        BinaryPopulation.save_hdf(self, filename, path=path,
+                                  properties=propeties, **kwargs)
+
 
 class Raghavan_BinaryPopulation(Simulated_BinaryPopulation):
-    def __init__(self,M,e_M=0,n=1e4,ichrone=DARTMOUTH,
+    def __init__(self,M=None,e_M=0,n=1e4,ichrone=DARTMOUTH,
                  age=9.5, feh=0.0, q_fn=None, qmin=0.1,
                  minmass=0.12, **kwargs):
         """A Simulated_BinaryPopulation with empirical default distributions.
@@ -851,27 +859,19 @@ class Raghavan_BinaryPopulation(Simulated_BinaryPopulation):
 
 
         """
-        if q_fn is None:
-            q_fn = flat_massratio_fn(qmin=max(qmin,minmass/M))
+        if M is not None:
+            if q_fn is None:
+                q_fn = flat_massratio_fn(qmin=max(qmin,minmass/M))
 
-        if e_M != 0:
-            M = stats.norm(M,e_M).rvs(n)
+            if e_M != 0:
+                M = stats.norm(M,e_M).rvs(n)
 
-        Simulated_BinaryPopulation.__init__(self,M, q_fn,
+        Simulated_BinaryPopulation.__init__(self, M, q_fn,
                                             draw_raghavan_periods,
                                             draw_eccs, n=n,
                                             ichrone=ichrone,
                                             age=age, feh=feh,
                                             minmass=minmass, **kwargs)
-
-
-class BinaryPopulation_FromH5(BinaryPopulation,StarPopulation_FromH5):
-    def __init__(self,filename,path=''):
-        """Loads in a BinaryPopulation saved to .h5
-        """
-        StarPopulation_FromH5.__init__(self,filename,path=path)
-        self.orbpop = OrbitPopulation_FromH5(filename,path='{}/orbpop'.format(path))
-
 
 class TriplePopulation(StarPopulation):
     def __init__(self, stars=None,
@@ -913,7 +913,8 @@ class TriplePopulation(StarPopulation):
 
             
         """
-        if stars is None:
+ 
+        if stars is None and primary is not None:
             assert len(primary)==len(secondary) and len(primary)==len(tertiary)
             N = len(primary)
 
@@ -929,27 +930,27 @@ class TriplePopulation(StarPopulation):
                 stars['{}_C'.format(c)] = tertiary[c]
                
 
-        ##For orbit population, stars 2 and 3 are in short orbit, and star 1 in long.
-        ## So we need to define the proper mapping from A,B,C to 1,2,3.
-        ## If C is with A, then A=2, C=3, B=1
-        ## If C is with B, then A=1, B=2, C=3
+            ##For orbit population, stars 2 and 3 are in short orbit, and star 1 in long.
+            ## So we need to define the proper mapping from A,B,C to 1,2,3.
+            ## If C is with A, then A=2, C=3, B=1
+            ## If C is with B, then A=1, B=2, C=3
 
-        #CwA = stars['C_orbits']=='A'
-        #CwB = stars['C_orbits']=='B'
-        #stars['orbpop_number_A'] = np.ones(N)*(CwA*2 + CwB*1)
-        #stars['orbpop_number_B'] = np.ones(N)*(CwA*1 + CwB*2)
-        #stars['orbpop_number_C'] = np.ones(N)*3
+            #CwA = stars['C_orbits']=='A'
+            #CwB = stars['C_orbits']=='B'
+            #stars['orbpop_number_A'] = np.ones(N)*(CwA*2 + CwB*1)
+            #stars['orbpop_number_B'] = np.ones(N)*(CwA*1 + CwB*2)
+            #stars['orbpop_number_C'] = np.ones(N)*3
 
-        if orbpop is None:
-            if period_long is None or period_short is None:
-                period_1 = draw_raghavan_periods(N)
-                period_2 = draw_msc_periods(N)                
-                period_short = np.minimum(period_1, period_2)
-                period_long = np.maximum(period_1, period_2)
+            if orbpop is None:
+                if period_long is None or period_short is None:
+                    period_1 = draw_raghavan_periods(N)
+                    period_2 = draw_msc_periods(N)                
+                    period_short = np.minimum(period_1, period_2)
+                    period_long = np.maximum(period_1, period_2)
 
-            if ecc_short is None or ecc_long is None:
-                ecc_short = draw_eccs(N,period_short)
-                ecc_long = draw_eccs(N,period_long),
+                if ecc_short is None or ecc_long is None:
+                    ecc_short = draw_eccs(N,period_short)
+                    ecc_long = draw_eccs(N,period_long),
             
             M1 = stars['mass_A']
             M2 = stars['mass_B']
@@ -958,7 +959,7 @@ class TriplePopulation(StarPopulation):
             orbpop = TripleOrbitPopulation(M1,M2,M3,period_long,period_short,
                                            ecclong=ecc_long, eccshort=ecc_short)
 
-        StarPopulation.__init__(self,stars, orbpop=orbpop, **kwargs)
+        StarPopulation.__init__(self, stars=stars, orbpop=orbpop, **kwargs)
 
     @property
     def singles(self):
@@ -993,14 +994,15 @@ class TriplePopulation(StarPopulation):
 
         
 class MultipleStarPopulation(TriplePopulation):
-    def __init__(self, m1=1., age=9.6, feh=0.0,
+    def __init__(self, m1=None, age=9.6, feh=0.0,
                  f_binary=0.4, f_triple=0.12,
                  minq=0.1, minmass=0.11,
                  n=1e5, ichrone=DARTMOUTH,
                  multmass_fn=mult_masses,
                  period_long_fn=draw_raghavan_periods,
                  period_short_fn=draw_msc_periods,
-                 ecc_fn=draw_eccs,orbpop=None,
+                 ecc_fn=draw_eccs,
+                 orbpop=None, stars=None,
                  **kwargs):
         """A population of single, double, and triple stars, generated according to prescription.
 
@@ -1043,45 +1045,78 @@ class MultipleStarPopulation(TriplePopulation):
 
         """
 
-        m1, m2, m3 = multmass_fn(m1, f_binary=f_binary,
-                                 f_triple=f_triple,
-                                 minq=minq, minmass=minmass,
-                                 n=n)
+        #These get set even if stars is passed
+        self.f_binary = f_binary
+        self.f_triple = f_triple
+        self.minq = minq
+        self.minmass = minmass
+        self.multmass_fn = multmass_fn
+        self.period_long_fn = period_long_fn
+        self.period_short_fn = period_short_fn
+        self.ecc_fn = ecc_fn
 
-        #generate stellar properties
-        primary = ichrone(m1,age,feh)
-        secondary = ichrone(m2,age,feh)
-        tertiary = ichrone(m3,age,feh)
-
-        #clean up columns that become nan when called with mass=0
-        # Remember, we want mass=0 and mags=inf when something doesn't exist
-        no_secondary = (m2==0)
-        no_tertiary = (m3==0)
-        for c in secondary.columns: #
-            if re.search('_mag',c):
-                secondary[c][no_secondary] = np.inf
-                tertiary[c][no_tertiary] = np.inf
-        secondary['mass'][no_secondary] = 0
-        tertiary['mass'][no_tertiary] = 0
+        if stars is None and m1 is not None:
+            self.generate(m1, age=age, feh=feh, n=n, ichrone=ichrone,
+                          orbpop=orbpop)
+        else:
+            TriplePopulation.__init__(self, stars=stars, orbpop=orbpop, **kwargs)
 
 
-        period_1 = period_long_fn(n)
-        period_2 = period_short_fn(n)
-        period_short = np.minimum(period_1, period_2)
-        period_long = np.maximum(period_1, period_2)
+    def generate(self, m1, age=9.6, feh=0.0, n=1e5, ichrone=DARTMOUTH,
+                 orbpop=None)
+            m1, m2, m3 = self.multmass_fn(m1, f_binary=self.f_binary,
+                                          f_triple=self.f_triple,
+                                          minq=self.minq, minmass=self.minmass,
+                                          n=n)
 
-        ecc_short = draw_eccs(n, period_short)
-        ecc_long = draw_eccs(n, period_long)
+            #generate stellar properties
+            primary = ichrone(m1,age,feh)
+            secondary = ichrone(m2,age,feh)
+            tertiary = ichrone(m3,age,feh)
 
-        TriplePopulation.__init__(self, primary=primary, 
-                                  secondary=secondary, tertiary=tertiary,
-                                  orbpop=orbpop,
-                                  period_short=period_short,
-                                  period_long=period_long,
-                                  ecc_short=ecc_short,
-                                  ecc_long=ecc_long,**kwargs)
-                        
-class ColormatchMultipleStarPopulation(TriplePopulation):
+            #clean up columns that become nan when called with mass=0
+            # Remember, we want mass=0 and mags=inf when something doesn't exist
+            no_secondary = (m2==0)
+            no_tertiary = (m3==0)
+            for c in secondary.columns: #
+                if re.search('_mag',c):
+                    secondary[c][no_secondary] = np.inf
+                    tertiary[c][no_tertiary] = np.inf
+            secondary['mass'][no_secondary] = 0
+            tertiary['mass'][no_tertiary] = 0
+
+
+            period_1 = self.period_long_fn(n)
+            period_2 = self.period_short_fn(n)
+            period_short = np.minimum(period_1, period_2)
+            period_long = np.maximum(period_1, period_2)
+
+            ecc_short = self.ecc_fn(n, period_short)
+            ecc_long = self.ecc_fn(n, period_long)
+
+            TriplePopulation.__init__(self, primary=primary, 
+                                      secondary=secondary, tertiary=tertiary,
+                                      orbpop=orbpop,
+                                      period_short=period_short,
+                                      period_long=period_long,
+                                      ecc_short=ecc_short,
+                                      ecc_long=ecc_long, **kwargs)
+            return self
+
+    def save_hdf(self, filename, path='', properties=None, **kwargs):
+        if properties is None:
+            properties = {}
+
+        for prop in ['f_binary', 'f_triple',
+                     'minq', 'minmass',
+                     'period_long_fn', 'period_short_fn',
+                     'ecc_fn']:
+            properties[prop] = getattr(self,prop)
+
+        TriplePopulation.save_hdf(self, filename, path=path,
+                                  properties=properties, **kwargs)
+
+class ColormatchMultipleStarPopulation(MultipleStarPopulation):
     def __init__(self, mags=None, colors=['JK'], colortol=0.1, 
                  m1=None, age=9.6, feh=0.0, n=2e4,
                  starfield=None, **kwargs):
@@ -1117,107 +1152,128 @@ class ColormatchMultipleStarPopulation(TriplePopulation):
             
         kwargs passed to MultipleStarPopulation
         """
+        
+        self.mags = mags
+        self.colors = colors
+        self.colortol = colortol
+        if starfield is not None:
+            self.starfield = os.path.abspath(starfield)
+        else:
+            self.starfield = None
 
         if mags is None:
-            stars = None
-            orbpop = None
+            MultipleStarPopulation.__init__(self, **kwargs)
         else:
-            n = int(n)
+            self.generate(n, m1=m1, age=age, feh=feh, n=n, **kwargs)
 
-            self.mags = mags
-            self.colors = colors
-            self.colortol = colortol
-            self.starfield = starfield
 
-            stars = pd.DataFrame()
-            df_long = pd.DataFrame()
-            df_short = pd.DataFrame()
+    def generate(self, m1=None, age=9.6, feh=0.0,
+                 n=2e4, **kwargs):
+        n = int(n)
 
-            if m1 is None:
-                if starfield is None:
-                    raise ValueError('If masses are not provided, then starfield must be.')
-                if type(starfield) == type(''):
-                    df = pd.read_hdf(starfield,'df', autoclose=True)
-                else:
-                    df = starfield
-                m1 = np.array(df['Mact'])
-                age = np.array(df['logAge'])
-                feh = np.array(df['[M/H]'])
+        stars = pd.DataFrame()
+        df_long = pd.DataFrame()
+        df_short = pd.DataFrame()
+
+        if m1 is None:
+            if self.starfield is None:
+                raise ValueError('If masses are not provided, then starfield must be.')
+            if type(self.starfield) == type(''):
+                df = pd.read_hdf(self.starfield,'df', autoclose=True)
             else:
-                #m1, age, and feh all need to be arrays, or such
-                # arrays must be created here.
-                if type(m1) is type((1,)):
-                    m1 = dists.Gaussian_Distribution(*m1)
-                if type(age) is type((1,)):
-                    age = dists.Gaussian_Distribution(*age)
-                if type(feh) is type((1,)):
-                    feh = dists.Gaussian_Distribution(*feh)
+                raise ValueError('Please pass filename of starfield, not full dataframe.')
+                #df = starfield
+            m1 = np.array(df['Mact'])
+            age = np.array(df['logAge'])
+            feh = np.array(df['[M/H]'])
+        else:
+            #m1, age, and feh all need to be arrays, or such
+            # arrays must be created here.
+            if type(m1) is type((1,)):
+                m1 = dists.Gaussian_Distribution(*m1)
+            if type(age) is type((1,)):
+                age = dists.Gaussian_Distribution(*age)
+            if type(feh) is type((1,)):
+                feh = dists.Gaussian_Distribution(*feh)
 
-                if isinstance(m1, dists.Distribution):
-                    m1dist = m1
-                    m1 = m1dist.rvs(1e5)
-                if isinstance(age, dists.Distribution):
-                    agedist = age
-                    age = agedist.rvs(1e5)
-                if isinstance(feh, dists.Distribution):
-                    fehdist = feh
-                    feh = fehdist.rvs(1e5)
+            if isinstance(m1, dists.Distribution):
+                m1dist = m1
+                m1 = m1dist.rvs(1e5)
+            if isinstance(age, dists.Distribution):
+                agedist = age
+                age = agedist.rvs(1e5)
+            if isinstance(feh, dists.Distribution):
+                fehdist = feh
+                feh = fehdist.rvs(1e5)
 
-                if np.size(m1)==1:
-                    m1 = m1*np.ones(1)
-                if np.size(age)==1:
-                    m1 = age*np.ones(1)
-                if np.size(feh)==1:
-                    feh = feh*np.ones(1)
-
-
-            n_adapt = n
-            while len(stars) < n:
-
-                inds = np.random.randint(len(m1),size=n_adapt)
-                pop = MultipleStarPopulation(m1[inds], age[inds], feh[inds], n=n_adapt,
-                                             **kwargs)
+            if np.size(m1)==1:
+                m1 = m1*np.ones(1)
+            if np.size(age)==1:
+                m1 = age*np.ones(1)
+            if np.size(feh)==1:
+                feh = feh*np.ones(1)
 
 
-                #if mags and colors provided, enforce that everything 
-                # matches given colors
-                cond = np.ones(n_adapt).astype(bool)
-                for c in colors:
-                    m = re.search('^(\w)(\w)$',c)                
-                    if m:
-                        b1 = m.group(1)
-                        b2 = m.group(2)
-                        if b1 not in mags or b2 not in mags:
-                            logging.warning('color {} ignored, either {} or {} not provided.'.format(c,b1,b2))
-                            continue
-                        if np.isnan(mags[b1]) or np.isnan(mags[b2]):
-                            logging.warning('color {} ignored, either {} or {} mag is nan.'.format(c,b1,b2))
-                            continue
+        n_adapt = n
+        while len(stars) < n:
 
-                        obs_color = mags[b1] - mags[b2]
-                        #simkeywords['{}-{}'.format(b1,b2)] = obs_color
+            inds = np.random.randint(len(m1),size=n_adapt)
+            pop = MultipleStarPopulation(m1[inds], age[inds], feh[inds], n=n_adapt,
+                                         **kwargs)
 
-                        mod_color = pop.stars['{}_mag'.format(b1)] - pop.stars['{}_mag'.format(b2)]
 
-                        cmatch = np.absolute(mod_color - obs_color) < colortol
-                        cond &= cmatch
-                    else:
-                        logging.warning('unrecognized color: {}'.format(c))
+            #if mags and colors provided, enforce that everything 
+            # matches given colors
+            cond = np.ones(n_adapt).astype(bool)
+            for c in self.colors:
+                m = re.search('^(\w)(\w)$',c)                
+                if m:
+                    b1 = m.group(1)
+                    b2 = m.group(2)
+                    if b1 not in self.mags or b2 not in self.mags:
+                        logging.warning('color {} ignored, either {} or {} not provided.'.format(c,b1,b2))
+                        continue
+                    if np.isnan(self.mags[b1]) or np.isnan(self.mags[b2]):
+                        logging.warning('color {} ignored, either {} or {} mag is nan.'.format(c,b1,b2))
+                        continue
 
-                stars = pd.concat((stars,pop.stars[cond]))
-                n_adapt = min(int(1.2*(n-len(stars)) * n_adapt//cond.sum()), 3e5)
-                print(len(stars))
-                df_long = pd.concat((df_long, pop.orbpop.orbpop_long.dataframe[cond]))
-                df_short = pd.concat((df_short, pop.orbpop.orbpop_short.dataframe[cond]))
+                    obs_color = self.mags[b1] - self.mags[b2]
+                    #simkeywords['{}-{}'.format(b1,b2)] = obs_color
 
-                logging.info('{} systems match color constraints'.format(len(stars)))
+                    mod_color = pop.stars['{}_mag'.format(b1)] - pop.stars['{}_mag'.format(b2)]
 
-            stars = stars.iloc[:n]
-            df_long = df_long.iloc[:n]
-            df_short = df_short.iloc[:n]
-            orbpop = TripleOrbitPopulation_FromDF(df_long, df_short)
+                    cmatch = np.absolute(mod_color - obs_color) < self.colortol
+                    cond &= cmatch
+                else:
+                    logging.warning('unrecognized color: {}'.format(c))
+
+            stars = pd.concat((stars,pop.stars[cond]))
+            n_adapt = min(int(1.2*(n-len(stars)) * n_adapt//cond.sum()), 3e5)
+            print(len(stars))
+            df_long = pd.concat((df_long, pop.orbpop.orbpop_long.dataframe[cond]))
+            df_short = pd.concat((df_short, pop.orbpop.orbpop_short.dataframe[cond]))
+
+            logging.info('{} systems match color constraints'.format(len(stars)))
+
+        stars = stars.iloc[:n]
+        df_long = df_long.iloc[:n]
+        df_short = df_short.iloc[:n]
+        orbpop = TripleOrbitPopulation_FromDF(df_long, df_short)
         
-        TriplePopulation.__init__(self, stars=stars, orbpop=orbpop)
+        MultipleStarPopulation.__init__(self, stars=stars, orbpop=orbpop, **kwargs)
+
+        return self
+
+    def save_hdf(self, filename, path='', properties=None, **kwargs):
+        if properties is None:
+            properties = {}
+        
+        for prop in ['mags', 'colors', 'colortol', 'starfield']:
+            properties[prop] = getattr(self, prop)
+
+        MultipleStarPopulation.save_hdf(self, filename, path=path, 
+                                        properties=properties,
+                                        **kwargs)
 
 
 class BGStarPopulation(StarPopulation):
@@ -1230,11 +1286,11 @@ class BGStarPopulation(StarPopulation):
             Properties of stars.  Must have 'distance' column defined.
 
         """
+        self.mags = mags
+
         if stars is not None:
             if 'distance' not in stars:
                 raise ValueError('Stars must have distance column defined')
-
-            self.mags = mags
 
             if density is None:
                 self.density = len(stars)/((3600.*u.arcsec)**2) #default is for TRILEGAL sims to be 1deg^2
@@ -1276,17 +1332,12 @@ class BGStarPopulation(StarPopulation):
     def save_hdf(self,filename,path='', properties=None, **kwargs):
         if properties is None:
             properties = {}
-        properties['_maxrad'] = self._maxrad
-        properties['density'] = self.density
+
+        for prop in ['mags', '_maxrad', 'density']:
+            properties[prop] = getattr(self, prop)
+
         StarPopulation.save_hdf(self,filename,path=path,properties=properties,
                                 **kwargs)
-
-class BGStarPopulation_FromH5(BGStarPopulation,StarPopulation_FromH5):
-    def __init__(self,filename,path=''):
-        """Loads in a BGStarPopulation saved to .h5
-        """
-        StarPopulation_FromH5.__init__(self,filename,path=path)
-
 
 class BGStarPopulation_TRILEGAL(BGStarPopulation):
     def __init__(self,filename=None,ra=None,dec=None,mags=None,maxrad=1800,
@@ -1319,7 +1370,11 @@ class BGStarPopulation_TRILEGAL(BGStarPopulation):
         Additional keyword arguments passed to ``get_trilegal``
         """
 
-        if filename is not None:
+        self.trilegal_args = {}
+
+        if filename is None:
+            BGStarPopulation.__init__(self)
+        else:
             m = re.search('(.*)\.h5$',filename)
             if not m:
                 h5filename = '{}.h5'.format(filename)
@@ -1354,8 +1409,10 @@ class BGStarPopulation_TRILEGAL(BGStarPopulation):
                                       density=density,name=name)
 
 
-    def save_hdf(self,filename,path='',**kwargs):
-        properties = {'trilegal_args':self.trilegal_args}
+    def save_hdf(self,filename,path='', properties=None, **kwargs):
+        if properties is None:
+            properties = {}
+        properties['trilegal_args'] = self.trilegal_args}
         BGStarPopulation.save_hdf(self,filename,path=path,
                                   properties=properties, **kwargs)
 
