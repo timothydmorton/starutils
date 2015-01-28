@@ -46,6 +46,8 @@ class StarPopulation(object):
                  name='', orbpop=None):
         """A population of stars.  Initialized with no constraints.
 
+        Intended to be subclassed.  
+
         stars : ``pandas`` ``DataFrame`` object
             Data table containing properties of stars.
             Magnitude properties end with "_mag".  Default
@@ -562,6 +564,8 @@ class StarPopulation(object):
 
         if properties is None:
             properties = {}
+        properties['name'] = self.name
+        
         self.stars.to_hdf(filename,'{}/stars'.format(path))
         self.constraint_df.to_hdf(filename,'{}/constraints'.format(path))
 
