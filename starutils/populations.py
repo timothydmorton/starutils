@@ -1102,10 +1102,19 @@ class ColormatchMultipleStarPopulation(TriplePopulation):
         colortol : float (optional)
             Tolerance within which to constrain color matching.
 
-        m1, age, feh : float, array_like, or ``Distribution``
+        m1, age, feh : float, array_like, or ``Distribution`` (optional)
             Primary masses, age, and feh.  If float or array_like, 
             those values are used; if distributions, they are resampled.
             
+        n : int (optional)
+            Desired size of simulation (default = 2e4)
+
+        starfield : ``None``, string, or ``DataFrame``
+            If m1 is not provided in some form, then primary masses will
+            get randomly selected from this starfield, assumed to be
+            a TRILEGAL simulation.  If string, then should be a filename
+            of an .h5 file containing the TRILEGAL simulation, or can
+            be a DataFrame directly.
             
         kwargs passed to MultipleStarPopulation
         """
