@@ -138,7 +138,7 @@ class StarPopulation(object):
             
         self.stars = pd.concat((self.stars, other.stars))
         
-        if hasattr(self,'orbpop'):
+        if self.orbpop is not None and other.orbpop is not None:
             self.orbpop = self.orbpop + other.orbpop
 
         #Clear all constraints that might exist
@@ -537,19 +537,25 @@ class StarPopulation(object):
             df[name] = c.ok
         return df
 
-    def save_hdf(self,filename,path='',properties=None):
+    def save_hdf(self,filename,path='',properties=None,
+                 overwrite=False, append=False):
         """Saves to .h5 file.
 
         Subclasses should define a save_hdf that passes
         the appropriate properties to reconstruct the object.
         """
+        if os.path.exists(filename):
+            if overwrite:
+                os.remove(filename)
+            elif not append:
+                raise IOError('{} exists.  Set either overwrite or append option.'.format(filename))
+
         if properties is None:
             properties = {}
         self.stars.to_hdf(filename,'{}/stars'.format(path))
         self.constraint_df.to_hdf(filename,'{}/constraints'.format(path))
 
-        #save orbpop, if exists
-        if hasattr(self, 'orbpop'):
+        if self.orbpop is not None:
             self.orbpop.save_hdf(filename, path=path+'/orbpop')
 
         store = pd.HDFStore(filename)
@@ -752,10 +758,8 @@ class BinaryPopulation(StarPopulation):
         dist = self.rsky_distribution(**kwargs)
         return dist(rsky)
 
-    def save_hdf(self,filename,path='',properties=None):
-        if properties is None:
-            properties = {}
-        StarPopulation.save_hdf(self,filename,path=path, properties=properties)
+    def save_hdf(self,filename,path='', **kwargs):
+        StarPopulation.save_hdf(self,filename,path=path, **kwargs)
 
         
 class Simulated_BinaryPopulation(BinaryPopulation):
@@ -1078,7 +1082,7 @@ class MultipleStarPopulation(TriplePopulation):
                                   ecc_long=ecc_long,**kwargs)
                         
 class ColormatchMultipleStarPopulation(TriplePopulation):
-    def __init__(self, mags, colors=['JK'], colortol=0.1, 
+    def __init__(self, mags=None, colors=['JK'], colortol=0.1, 
                  m1=None, age=9.6, feh=0.0, n=2e4,
                  starfield=None, **kwargs):
         """Multiple star population constrained to match provided colors
@@ -1114,108 +1118,110 @@ class ColormatchMultipleStarPopulation(TriplePopulation):
         kwargs passed to MultipleStarPopulation
         """
 
-        n = int(n)
-        
-        self.mags = mags
-        self.colors = colors
-        self.colortol = colortol
-
-        self.starfield = starfield
-
-        stars = pd.DataFrame()
-        df_long = pd.DataFrame()
-        df_short = pd.DataFrame()
-    
-        if m1 is None:
-            if starfield is None:
-                raise ValueError('If masses are not provided, then starfield must be.')
-            if type(starfield) == type(''):
-                df = pd.read_hdf(starfield,'df', autoclose=True)
-            else:
-                df = starfield
-            m1 = np.array(df['Mact'])
-            age = np.array(df['logAge'])
-            feh = np.array(df['[M/H]'])
+        if mags is None:
+            stars = None
+            orbpop = None
         else:
-            #m1, age, and feh all need to be arrays, or such
-            # arrays must be created here.
-            if type(m1) is type((1,)):
-                m1 = dists.Gaussian_Distribution(*m1)
-            if type(age) is type((1,)):
-                age = dists.Gaussian_Distribution(*age)
-            if type(feh) is type((1,)):
-                feh = dists.Gaussian_Distribution(*feh)
+            n = int(n)
 
-            if isinstance(m1, dists.Distribution):
-                m1dist = m1
-                m1 = m1dist.rvs(1e5)
-            if isinstance(age, dists.Distribution):
-                agedist = age
-                age = agedist.rvs(1e5)
-            if isinstance(feh, dists.Distribution):
-                fehdist = feh
-                feh = fehdist.rvs(1e5)
+            self.mags = mags
+            self.colors = colors
+            self.colortol = colortol
+            self.starfield = starfield
 
-            if np.size(m1)==1:
-                m1 = m1*np.ones(1)
-            if np.size(age)==1:
-                m1 = age*np.ones(1)
-            if np.size(feh)==1:
-                feh = feh*np.ones(1)
+            stars = pd.DataFrame()
+            df_long = pd.DataFrame()
+            df_short = pd.DataFrame()
 
-
-        simkeywords = {} #note this as property to save in save_hdf...
-        n_adapt = n
-        while len(stars) < n:
-
-            inds = np.random.randint(len(m1),size=n_adapt)
-            pop = MultipleStarPopulation(m1[inds], age[inds], feh[inds], n=n_adapt,
-                                         **kwargs)
-
-
-            #if mags and colors provided, enforce that everything 
-            # matches given colors
-            cond = np.ones(n_adapt).astype(bool)
-            for c in colors:
-                m = re.search('^(\w)(\w)$',c)                
-                if m:
-                    b1 = m.group(1)
-                    b2 = m.group(2)
-                    if b1 not in mags or b2 not in mags:
-                        logging.warning('color {} ignored, either {} or {} not provided.'.format(c,b1,b2))
-                        continue
-                    if np.isnan(mags[b1]) or np.isnan(mags[b2]):
-                        logging.warning('color {} ignored, either {} or {} mag is nan.'.format(c,b1,b2))
-                        continue
-
-                    obs_color = mags[b1] - mags[b2]
-                    simkeywords['{}-{}'.format(b1,b2)] = obs_color
-
-                    mod_color = pop.stars['{}_mag'.format(b1)] - pop.stars['{}_mag'.format(b2)]
-
-                    cmatch = np.absolute(mod_color - obs_color) < colortol
-                    cond &= cmatch
+            if m1 is None:
+                if starfield is None:
+                    raise ValueError('If masses are not provided, then starfield must be.')
+                if type(starfield) == type(''):
+                    df = pd.read_hdf(starfield,'df', autoclose=True)
                 else:
-                    logging.warning('unrecognized color: {}'.format(c))
-            
-            stars = pd.concat((stars,pop.stars[cond]))
-            n_adapt = min(int(1.2*(n-len(stars)) * n_adapt//cond.sum()), 3e5)
-            print(len(stars))
-            df_long = pd.concat((df_long, pop.orbpop.orbpop_long.dataframe[cond]))
-            df_short = pd.concat((df_short, pop.orbpop.orbpop_short.dataframe[cond]))
-            
-            logging.info('{} systems match color constraints'.format(len(stars)))
-        
-        stars = stars.iloc[:n]
-        df_long = df_long.iloc[:n]
-        df_short = df_short.iloc[:n]
-        orbpop = TripleOrbitPopulation_FromDF(df_long, df_short)
+                    df = starfield
+                m1 = np.array(df['Mact'])
+                age = np.array(df['logAge'])
+                feh = np.array(df['[M/H]'])
+            else:
+                #m1, age, and feh all need to be arrays, or such
+                # arrays must be created here.
+                if type(m1) is type((1,)):
+                    m1 = dists.Gaussian_Distribution(*m1)
+                if type(age) is type((1,)):
+                    age = dists.Gaussian_Distribution(*age)
+                if type(feh) is type((1,)):
+                    feh = dists.Gaussian_Distribution(*feh)
+
+                if isinstance(m1, dists.Distribution):
+                    m1dist = m1
+                    m1 = m1dist.rvs(1e5)
+                if isinstance(age, dists.Distribution):
+                    agedist = age
+                    age = agedist.rvs(1e5)
+                if isinstance(feh, dists.Distribution):
+                    fehdist = feh
+                    feh = fehdist.rvs(1e5)
+
+                if np.size(m1)==1:
+                    m1 = m1*np.ones(1)
+                if np.size(age)==1:
+                    m1 = age*np.ones(1)
+                if np.size(feh)==1:
+                    feh = feh*np.ones(1)
+
+
+            n_adapt = n
+            while len(stars) < n:
+
+                inds = np.random.randint(len(m1),size=n_adapt)
+                pop = MultipleStarPopulation(m1[inds], age[inds], feh[inds], n=n_adapt,
+                                             **kwargs)
+
+
+                #if mags and colors provided, enforce that everything 
+                # matches given colors
+                cond = np.ones(n_adapt).astype(bool)
+                for c in colors:
+                    m = re.search('^(\w)(\w)$',c)                
+                    if m:
+                        b1 = m.group(1)
+                        b2 = m.group(2)
+                        if b1 not in mags or b2 not in mags:
+                            logging.warning('color {} ignored, either {} or {} not provided.'.format(c,b1,b2))
+                            continue
+                        if np.isnan(mags[b1]) or np.isnan(mags[b2]):
+                            logging.warning('color {} ignored, either {} or {} mag is nan.'.format(c,b1,b2))
+                            continue
+
+                        obs_color = mags[b1] - mags[b2]
+                        #simkeywords['{}-{}'.format(b1,b2)] = obs_color
+
+                        mod_color = pop.stars['{}_mag'.format(b1)] - pop.stars['{}_mag'.format(b2)]
+
+                        cmatch = np.absolute(mod_color - obs_color) < colortol
+                        cond &= cmatch
+                    else:
+                        logging.warning('unrecognized color: {}'.format(c))
+
+                stars = pd.concat((stars,pop.stars[cond]))
+                n_adapt = min(int(1.2*(n-len(stars)) * n_adapt//cond.sum()), 3e5)
+                print(len(stars))
+                df_long = pd.concat((df_long, pop.orbpop.orbpop_long.dataframe[cond]))
+                df_short = pd.concat((df_short, pop.orbpop.orbpop_short.dataframe[cond]))
+
+                logging.info('{} systems match color constraints'.format(len(stars)))
+
+            stars = stars.iloc[:n]
+            df_long = df_long.iloc[:n]
+            df_short = df_short.iloc[:n]
+            orbpop = TripleOrbitPopulation_FromDF(df_long, df_short)
         
         TriplePopulation.__init__(self, stars=stars, orbpop=orbpop)
 
 
 class BGStarPopulation(StarPopulation):
-    def __init__(self,stars,mags=None,maxrad=1800,density=None,name=''):
+    def __init__(self,stars=None,mags=None,maxrad=1800,density=None,name=''):
         """Background star population
 
         Parameters
@@ -1224,25 +1230,28 @@ class BGStarPopulation(StarPopulation):
             Properties of stars.  Must have 'distance' column defined.
 
         """
-        if 'distance' not in stars:
-            raise ValueError('Stars must have distance column defined')
+        if stars is not None:
+            if 'distance' not in stars:
+                raise ValueError('Stars must have distance column defined')
 
-        self.mags = mags
+            self.mags = mags
 
-        if density is None:
-            self.density = len(stars)/((3600.*u.arcsec)**2) #default is for TRILEGAL sims to be 1deg^2
-        else:
-            if type(density)!=Quantity:
-                raise ValueError('Provided stellar density must have units.')
-            self.density = density
-        
-        if type(maxrad) != Quantity:
-            self._maxrad = maxrad*u.arcsec #arcsec
-        else:
-            self._maxrad = maxrad
+            if density is None:
+                self.density = len(stars)/((3600.*u.arcsec)**2) #default is for TRILEGAL sims to be 1deg^2
+            else:
+                if type(density)!=Quantity:
+                    raise ValueError('Provided stellar density must have units.')
+                self.density = density
 
-        StarPopulation.__init__(self,stars,name=name)
-        self.stars['Rsky'] = randpos_in_circle(len(stars),maxrad,return_rad=True)
+            if type(maxrad) != Quantity:
+                self._maxrad = maxrad*u.arcsec #arcsec
+            else:
+                self._maxrad = maxrad
+
+        StarPopulation.__init__(self,stars=stars,name=name)
+
+        if stars is not None:
+            self.stars['Rsky'] = randpos_in_circle(len(stars),maxrad,return_rad=True)
         
     @property
     def Rsky(self):
@@ -1264,12 +1273,13 @@ class BGStarPopulation(StarPopulation):
             raise ValueError('dmag is not defined because primary mags are not defined for this population.')
         return self.stars['{}_mag'.format(band)] - self.mags[band]
         
-    def save_hdf(self,filename,path='',properties=None):
+    def save_hdf(self,filename,path='', properties=None, **kwargs):
         if properties is None:
             properties = {}
         properties['_maxrad'] = self._maxrad
         properties['density'] = self.density
-        StarPopulation.save_hdf(self,filename,path=path,properties=properties)
+        StarPopulation.save_hdf(self,filename,path=path,properties=properties,
+                                **kwargs)
 
 class BGStarPopulation_FromH5(BGStarPopulation,StarPopulation_FromH5):
     def __init__(self,filename,path=''):
@@ -1279,7 +1289,7 @@ class BGStarPopulation_FromH5(BGStarPopulation,StarPopulation_FromH5):
 
 
 class BGStarPopulation_TRILEGAL(BGStarPopulation):
-    def __init__(self,filename,ra=None,dec=None,mags=None,maxrad=1800,
+    def __init__(self,filename=None,ra=None,dec=None,mags=None,maxrad=1800,
                  name='',**kwargs):
         """Creates TRILEGAL simulation for ra,dec; loads as BGStarPopulation
 
@@ -1289,7 +1299,7 @@ class BGStarPopulation_TRILEGAL(BGStarPopulation):
             Desired name of the TRILEGAL simulation.  Can either have '.h5' extension
             or not.  If filename (or 'filename.h5') exists locally, it will be
             loaded; otherwise, TRILEGAL will be called via the ``get_trilegal`` perl
-            script, and the file will be generated.
+            script, and the file will be generated.  
 
         ra, dec : float (optional)
             Sky coordinates of TRILEGAL simulation.  Must be passed if generating 
@@ -1308,44 +1318,46 @@ class BGStarPopulation_TRILEGAL(BGStarPopulation):
 
         Additional keyword arguments passed to ``get_trilegal``
         """
-        m = re.search('(.*)\.h5$',filename)
-        if not m:
-            h5filename = '{}.h5'.format(filename)
-            basefilename = filename
-        else:
-            h5filename = filename
-            basefilename = m.group(1)
 
-        try:
-            stars = pd.read_hdf(h5filename,'df', autoclose=True)
-        except:
-            if ra is None or dec is None:
-                raise ValueError('Must provide ra,dec if simulation file does not already exist.')
-            get_trilegal(basefilename,ra,dec,**kwargs)
-            stars = pd.read_hdf(h5filename,'df', autoclose=True)
-        store = pd.HDFStore(h5filename)
-        self.trilegal_args = store.get_storer('df').attrs.trilegal_args
-        store.close()
-        
-        c = SkyCoord(self.trilegal_args['l'],self.trilegal_args['b'],
-                     unit='deg',frame='galactic')
+        if filename is not None:
+            m = re.search('(.*)\.h5$',filename)
+            if not m:
+                h5filename = '{}.h5'.format(filename)
+                basefilename = filename
+            else:
+                h5filename = filename
+                basefilename = m.group(1)
 
-        self.coords = c.icrs
+            try:
+                stars = pd.read_hdf(h5filename,'df', autoclose=True)
+            except:
+                if ra is None or dec is None:
+                    raise ValueError('Must provide ra,dec if simulation file does not already exist.')
+                get_trilegal(basefilename,ra,dec,**kwargs)
+                stars = pd.read_hdf(h5filename,'df', autoclose=True)
+            store = pd.HDFStore(h5filename)
+            self.trilegal_args = store.get_storer('df').attrs.trilegal_args
+            store.close()
 
-        area = self.trilegal_args['area']*(u.deg)**2
-        density = len(stars)/area
+            c = SkyCoord(self.trilegal_args['l'],self.trilegal_args['b'],
+                         unit='deg',frame='galactic')
 
-        stars['distmod'] = stars['m-M0']
-        stars['distance'] = dfromdm(stars['distmod']) 
+            self.coords = c.icrs
 
-        BGStarPopulation.__init__(self,stars,mags=mags,maxrad=maxrad,
-                                  density=density,name=name)
+            area = self.trilegal_args['area']*(u.deg)**2
+            density = len(stars)/area
 
-    def save_hdf(self,filename,path=''):
-        properties = {'trilegal_args':self.trilegal_args,
-                      'ra':self.ra,'dec':self.dec}
+            stars['distmod'] = stars['m-M0']
+            stars['distance'] = dfromdm(stars['distmod']) 
+
+            BGStarPopulation.__init__(self,stars,mags=mags,maxrad=maxrad,
+                                      density=density,name=name)
+
+
+    def save_hdf(self,filename,path='',**kwargs):
+        properties = {'trilegal_args':self.trilegal_args}
         BGStarPopulation.save_hdf(self,filename,path=path,
-                                  properties=properties)
+                                  properties=properties, **kwargs)
 
 
 
