@@ -1106,9 +1106,24 @@ class MultipleStarPopulation(TriplePopulation):
                     kwargs['period_long'] = np.maximum(period_1, period_2)
                 else:
                     kwargs['period_short'] = self.period_short_fn(n)
+
+                    #correct any short periods that are longer than period_long
+                    bad = kwargs['period_short'] > kwargs['period_long']
+                    inds = np.where(~bad)[0]
+                    np.random.shuffle(inds)
+                    n_bad = bad.sum()
+                    kwargs['period_short'][bad] = kwargs['period_short'][inds[:n_bad]]
             else:
                 if 'period_long' not in kwargs:
                     kwargs['period_long'] = self.period_long_fn(n)
+
+                    #correct any long periods that are shorter than period_short
+                    bad = kwargs['period_long'] < kwargs['period_short']
+                    inds = np.where(~bad)[0]
+                    np.random.shuffle(inds)
+                    n_bad = bad.sum()
+                    kwargs['period_long'][bad] = kwargs['period_long'][inds[:n_bad]]
+
 
             if 'ecc_short' not in kwargs:
                 kwargs['ecc_short'] = self.ecc_fn(n, kwargs['period_short'])

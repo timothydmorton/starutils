@@ -30,8 +30,13 @@ def test_colormatch(filename=os.path.join(TMP,'test_colormatch.h5')):
     pop2 = ColormatchMultipleStarPopulation().load_hdf(filename)    
     os.remove(filename)
 
-def test_multiple_specific_period_short(filename=os.path.join(TMP,'test_pshort.h5')):
-    pop = MultipleStarPopulation(1, period_short=10, n=100)
+def test_multiple_specific_periods(filename=os.path.join(TMP,'test_pshort.h5')):
+    pop = MultipleStarPopulation(1, period_short=100, n=100)
+    pop.save_hdf(filename, overwrite=True)
+    pop2 = MultipleStarPopulation().load_hdf(filename)
+    os.remove(filename)
+
+    pop = MultipleStarPopulation(1, period_long=1000, n=100)
     pop.save_hdf(filename, overwrite=True)
     pop2 = MultipleStarPopulation().load_hdf(filename)
     os.remove(filename)
