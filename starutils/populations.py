@@ -8,8 +8,6 @@ import logging
 import re, os, os.path
 import numpy.random as rand
 
-import copy
-
 from astropy import units as u
 from astropy.units import Quantity
 from astropy.coordinates import SkyCoord
@@ -1151,7 +1149,7 @@ class MultipleStarPopulation(TriplePopulation):
 
 class ColormatchMultipleStarPopulation(MultipleStarPopulation):
     def __init__(self, mags=None, colors=['JK'], colortol=0.1, 
-                 m1=None, age=9.6, feh=0.0, n=2e4,
+                 mA=None, age=9.6, feh=0.0, n=2e4,
                  starfield=None, **kwargs):
         """Multiple star population constrained to match provided colors
 
@@ -1169,7 +1167,7 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
         colortol : float (optional)
             Tolerance within which to constrain color matching.
 
-        m1, age, feh : float, array_like, or ``Distribution`` (optional)
+        mA, age, feh : float, array_like, or ``Distribution`` (optional)
             Primary masses, age, and feh.  If float or array_like, 
             those values are used; if distributions, they are resampled.
             
@@ -1197,10 +1195,10 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
         if mags is None:
             MultipleStarPopulation.__init__(self, **kwargs)
         else:
-            self.generate(m1=m1, age=age, feh=feh, n=n, **kwargs)
+            self.generate(mA=mA, age=age, feh=feh, n=n, **kwargs)
 
 
-    def generate(self, m1=None, age=9.6, feh=0.0,
+    def generate(self, mA=None, age=9.6, feh=0.0,
                  n=2e4, **kwargs):
         n = int(n)
 
@@ -1208,7 +1206,7 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
         df_long = pd.DataFrame()
         df_short = pd.DataFrame()
 
-        if m1 is None:
+        if mA is None:
             if self.starfield is None:
                 raise ValueError('If masses are not provided, then starfield must be.')
             if type(self.starfield) == type(''):
@@ -1216,22 +1214,22 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
             else:
                 raise ValueError('Please pass filename of starfield, not full dataframe.')
                 #df = starfield
-            m1 = np.array(df['Mact'])
+            mA = np.array(df['Mact'])
             age = np.array(df['logAge'])
             feh = np.array(df['[M/H]'])
         else:
-            #m1, age, and feh all need to be arrays, or such
+            #mA, age, and feh all need to be arrays, or such
             # arrays must be created here.
-            if type(m1) is type((1,)):
-                m1 = dists.Gaussian_Distribution(*m1)
+            if type(mA) is type((1,)):
+                mA = dists.Gaussian_Distribution(*mA)
             if type(age) is type((1,)):
                 age = dists.Gaussian_Distribution(*age)
             if type(feh) is type((1,)):
                 feh = dists.Gaussian_Distribution(*feh)
 
-            if isinstance(m1, dists.Distribution):
-                m1dist = m1
-                m1 = m1dist.rvs(1e5)
+            if isinstance(mA, dists.Distribution):
+                mAdist = mA
+                mA = mAdist.rvs(1e5)
             if isinstance(age, dists.Distribution):
                 agedist = age
                 age = agedist.rvs(1e5)
@@ -1239,10 +1237,10 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
                 fehdist = feh
                 feh = fehdist.rvs(1e5)
 
-            if np.size(m1)==1:
-                m1 = m1*np.ones(1)
+            if np.size(mA)==1:
+                mA = mA*np.ones(1)
             if np.size(age)==1:
-                m1 = age*np.ones(1)
+                age = age*np.ones(1)
             if np.size(feh)==1:
                 feh = feh*np.ones(1)
 
@@ -1250,10 +1248,9 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
         n_adapt = n
         while len(stars) < n:
 
-            inds = np.random.randint(len(m1),size=n_adapt)
-            pop = MultipleStarPopulation(m1[inds], age[inds], feh[inds], n=n_adapt,
-                                         **kwargs)
-
+            inds = np.random.randint(len(mA),size=n_adapt)
+            pop = MultipleStarPopulation(mA=mA[inds], age=age[inds], feh=feh[inds], 
+                                         n=n_adapt, **kwargs)
 
             #if mags and colors provided, enforce that everything 
             # matches given colors
@@ -1276,6 +1273,9 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
                     mod_color = pop.stars['{}_mag'.format(b1)] - pop.stars['{}_mag'.format(b2)]
 
                     cmatch = np.absolute(mod_color - obs_color) < self.colortol
+                    if cmatch.sum()==0:
+                        logging.warning('No systems match {}={})'.format(c,obs_color))
+                        #logging.debug(pop.stars[['mass_A','mass_B','mass_C']])
                     cond &= cmatch
                 else:
                     logging.warning('unrecognized color: {}'.format(c))
