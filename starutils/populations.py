@@ -1003,13 +1003,14 @@ class TriplePopulation(StarPopulation):
 
         
 class MultipleStarPopulation(TriplePopulation):
-    def __init__(self, m1=None, age=9.6, feh=0.0,
+    def __init__(self, mA=None, age=9.6, feh=0.0,
                  f_binary=0.4, f_triple=0.12,
                  minq=0.1, minmass=0.11,
                  n=1e4, ichrone=DARTMOUTH,
                  multmass_fn=mult_masses,
                  period_long_fn=draw_raghavan_periods,
                  period_short_fn=draw_msc_periods,
+                 period_short=None,
                  ecc_fn=draw_eccs,
                  orbpop=None, stars=None,
                  **kwargs):
@@ -1017,7 +1018,7 @@ class MultipleStarPopulation(TriplePopulation):
 
         Parameters
         ----------
-        m1 : float or array_like (optional)
+        mA: float or array_like (optional)
             Mass of primary star(s).  Default=1.  If array, then the simulation will be 
             lots of individual systems; if float, then the simulation will be lots of 
             realizations of one system.
@@ -1044,7 +1045,7 @@ class MultipleStarPopulation(TriplePopulation):
         multmass_fn, peroid_long_fn, period_short_fn, ecc_fn : callables (optional)
             Functions to generate masses, orbital periods, and eccentricities.
             Defaults built in.  See ``TriplePopulation``.
-            
+
         orbpop : ``TripleOrbitPopulation`` (optional)
             Object describing orbits of stars.  If not provided, orbits will
             be randomly generated according to generating functions.
@@ -1064,16 +1065,19 @@ class MultipleStarPopulation(TriplePopulation):
         self.period_short_fn = period_short_fn
         self.ecc_fn = ecc_fn
 
-        if stars is None and m1 is not None:
-            self.generate(m1, age=age, feh=feh, n=n, ichrone=ichrone,
+        if stars is None and mA is not None:
+            self.generate(mA, age=age, feh=feh, n=n, ichrone=ichrone,
                           orbpop=orbpop, **kwargs)
         else:
             TriplePopulation.__init__(self, stars=stars, orbpop=orbpop, **kwargs)
 
 
-    def generate(self, m1, age=9.6, feh=0.0, n=1e5, ichrone=DARTMOUTH,
+    def generate(self, mA, age=9.6, feh=0.0, n=1e5, ichrone=DARTMOUTH,
                  orbpop=None, **kwargs):
-            m1, m2, m3 = self.multmass_fn(m1, f_binary=self.f_binary,
+
+            #star with m1 orbits (m2+m3).  So mA (most massive)
+            # will correspond to either m1 or m2.
+            m1, m2, m3 = self.multmass_fn(mA, f_binary=self.f_binary,
                                           f_triple=self.f_triple,
                                           minq=self.minq, minmass=self.minmass,
                                           n=n)
@@ -1094,22 +1098,27 @@ class MultipleStarPopulation(TriplePopulation):
             secondary['mass'][no_secondary] = 0
             tertiary['mass'][no_tertiary] = 0
 
+            if 'period_short' not in kwargs:
+                if 'period_long' not in kwargs:
+                    period_1 = self.period_long_fn(n)
+                    period_2 = self.period_short_fn(n)
+                    kwargs['period_short'] = np.minimum(period_1, period_2)
+                    kwargs['period_long'] = np.maximum(period_1, period_2)
+                else:
+                    kwargs['period_short'] = self.period_short_fn(n)
+            else:
+                if 'period_long' not in kwargs:
+                    kwargs['period_long'] = self.period_long_fn(n)
 
-            period_1 = self.period_long_fn(n)
-            period_2 = self.period_short_fn(n)
-            period_short = np.minimum(period_1, period_2)
-            period_long = np.maximum(period_1, period_2)
-
-            ecc_short = self.ecc_fn(n, period_short)
-            ecc_long = self.ecc_fn(n, period_long)
+            if 'ecc_short' not in kwargs:
+                kwargs['ecc_short'] = self.ecc_fn(n, kwargs['period_short'])
+            if 'ecc_long' not in kwargs:
+                kwargs['ecc_long'] = self.ecc_fn(n, kwargs['period_long'])
 
             TriplePopulation.__init__(self, primary=primary, 
                                       secondary=secondary, tertiary=tertiary,
-                                      orbpop=orbpop,
-                                      period_short=period_short,
-                                      period_long=period_long,
-                                      ecc_short=ecc_short,
-                                      ecc_long=ecc_long, **kwargs)
+                                      orbpop=orbpop, **kwargs)
+
             return self
 
     def save_hdf(self, filename, path='', properties=None, **kwargs):
