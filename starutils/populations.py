@@ -750,9 +750,6 @@ class BinaryPopulation(StarPopulation):
         dist = self.rsky_distribution(**kwargs)
         return dist(rsky)
 
-    def save_hdf(self,filename,path='', **kwargs):
-        StarPopulation.save_hdf(self,filename,path=path, **kwargs)
-
         
 class Simulated_BinaryPopulation(BinaryPopulation):
     def __init__(self,M=None,q_fn=None,P_fn=None,ecc_fn=None,
@@ -822,17 +819,8 @@ class Simulated_BinaryPopulation(BinaryPopulation):
 
     @property
     def _properties(self):
-        return ['q_fn', 'qmin', 'P_fn', 'ecc_fn', 'minmass']
-
-    def save_hdf(self, filename, path='', properties=None, **kwargs):
-        if properties is None:
-            properties = {}
-
-        for prop in self._properties:
-            properties[prop] = getattr(self, prop)
-            
-        BinaryPopulation.save_hdf(self, filename, path=path,
-                                  properties=properties, **kwargs)
+        return ['q_fn', 'qmin', 'P_fn', 'ecc_fn', 'minmass'] +\
+            super(Simulated_BinaryPopulation, self)._properties
 
 
 class Raghavan_BinaryPopulation(Simulated_BinaryPopulation):
@@ -1152,17 +1140,8 @@ class MultipleStarPopulation(TriplePopulation):
         return ['f_binary', 'f_triple',
                 'minq', 'minmass',
                 'period_long_fn', 'period_short_fn',
-                'ecc_fn']
+                'ecc_fn'] + super(MultipleStarPopulation, self)._properties
 
-    def save_hdf(self, filename, path='', properties=None, **kwargs):
-        if properties is None:
-            properties = {}
-
-        for prop in self._properties:
-            properties[prop] = getattr(self,prop)
-
-        TriplePopulation.save_hdf(self, filename, path=path,
-                                  properties=properties, **kwargs)
 
 class ColormatchMultipleStarPopulation(MultipleStarPopulation):
     def __init__(self, mags=None, colors=['JK'], colortol=0.1, 
@@ -1324,18 +1303,8 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
 
     @property
     def _properties(self):
-        return ['mags', 'colors', 'colortol', 'starfield']
-
-    def save_hdf(self, filename, path='', properties=None, **kwargs):
-        if properties is None:
-            properties = {}
-        
-        for prop in self._properties:
-            properties[prop] = getattr(self, prop)
-
-        MultipleStarPopulation.save_hdf(self, filename, path=path, 
-                                        properties=properties,
-                                        **kwargs)
+        return ['mags', 'colors', 'colortol', 'starfield'] + \
+            super(ColormatchMultipleStarPopulation, self)._properties
 
 
 class BGStarPopulation(StarPopulation):
@@ -1393,17 +1362,8 @@ class BGStarPopulation(StarPopulation):
         
     @property
     def _properties(self):
-        return ['mags', '_maxrad', 'density']        
-
-    def save_hdf(self,filename,path='', properties=None, **kwargs):
-        if properties is None:
-            properties = {}
-
-        for prop in self._properties:
-            properties[prop] = getattr(self, prop)
-
-        StarPopulation.save_hdf(self,filename,path=path,properties=properties,
-                                **kwargs)
+        return ['mags', '_maxrad', 'density'] + \
+            super(BGStarPopulation, self)._properties
 
 class BGStarPopulation_TRILEGAL(BGStarPopulation):
     def __init__(self,filename=None,ra=None,dec=None,mags=None,maxrad=1800,
@@ -1476,16 +1436,8 @@ class BGStarPopulation_TRILEGAL(BGStarPopulation):
 
     @property
     def _properties(self):
-        return ['trilegal_args']
-
-    def save_hdf(self,filename,path='', properties=None, **kwargs):
-        if properties is None:
-            properties = {}
-
-        properties['trilegal_args'] = self.trilegal_args
-        BGStarPopulation.save_hdf(self,filename,path=path,
-                                  properties=properties, **kwargs)
-
+        return ['trilegal_args'] + \
+            super(BGStarPopulation_TRILEGAL,self)._properties
 
 
 #methods below should be applied to relevant subclasses
