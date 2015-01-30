@@ -1289,7 +1289,7 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
 
             stars = pd.concat((stars,pop.stars[cond]))
             n_adapt = min(int(1.2*(n-len(stars)) * n_adapt//cond.sum()), 3e5)
-            logging.info('{} systems simulated.'.format(len(stars)))
+            logging.info('{} systems simulated to match provided colors (target {}).'.format(len(stars),n))
             df_long = pd.concat((df_long, pop.orbpop.orbpop_long.dataframe[cond]))
             df_short = pd.concat((df_short, pop.orbpop.orbpop_short.dataframe[cond]))
 
