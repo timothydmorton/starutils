@@ -13,12 +13,21 @@ def test_raghavan(filename=os.path.join(TMP,'test_raghavan.h5')):
     pop = Raghavan_BinaryPopulation(1, n=100)
     pop.save_hdf(filename, overwrite=True)
     pop2 = Raghavan_BinaryPopulation().load_hdf(filename)
+
+    #test to make sure correct properties are there
+    [pop2.q_fn, pop2.qmin, pop2.P_fn, pop2.ecc_fn, pop2.minmass]
+
     os.remove(filename)
 
 def test_multiple(filename=os.path.join(TMP,'test_multiple.h5')):
     pop = MultipleStarPopulation(1, n=100)
     pop.save_hdf(filename, overwrite=True)
     pop2 = MultipleStarPopulation().load_hdf(filename)
+
+    #test to make sure correct properties are there
+    [pop2.f_binary, pop2.f_triple, pop2.qmin, pop2.minmass,
+     pop2.period_long_fn, pop2.period_short_fn, pop2.ecc_fn]
+
     os.remove(filename)
 
 def test_colormatch(filename=os.path.join(TMP,'test_colormatch.h5')):
@@ -28,6 +37,10 @@ def test_colormatch(filename=os.path.join(TMP,'test_colormatch.h5')):
                                            feh=(0,0.1), n=100)
     pop.save_hdf(filename, overwrite=True)
     pop2 = ColormatchMultipleStarPopulation().load_hdf(filename)    
+
+    #test to make sure correct properties are there
+    [pop2.mags, pop2.colors, pop2.colortol, pop2.starfield]
+
     os.remove(filename)
 
 def test_multiple_specific_periods(filename=os.path.join(TMP,'test_pshort.h5')):

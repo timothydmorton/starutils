@@ -1003,7 +1003,7 @@ class TriplePopulation(StarPopulation):
 class MultipleStarPopulation(TriplePopulation):
     def __init__(self, mA=None, age=9.6, feh=0.0,
                  f_binary=0.4, f_triple=0.12,
-                 minq=0.1, minmass=0.11,
+                 qmin=0.1, minmass=0.11,
                  n=1e4, ichrone=DARTMOUTH,
                  multmass_fn=mult_masses,
                  period_long_fn=draw_raghavan_periods,
@@ -1028,7 +1028,7 @@ class MultipleStarPopulation(TriplePopulation):
         f_binary, f_triple : floats summing to between 0 and 1 (optional)
             Fraction of systems that should be binaries or triples.
 
-        minq : float (optional):
+        qmin : float (optional):
             Minimum mass ratio.
 
         minmass : float (optional):
@@ -1057,7 +1057,7 @@ class MultipleStarPopulation(TriplePopulation):
         #These get set even if stars is passed
         self.f_binary = f_binary
         self.f_triple = f_triple
-        self.minq = minq
+        self.qmin = qmin
         self.minmass = minmass
         self.multmass_fn = multmass_fn
         self.period_long_fn = period_long_fn
@@ -1078,7 +1078,7 @@ class MultipleStarPopulation(TriplePopulation):
             # will correspond to either m1 or m2.
             m1, m2, m3 = self.multmass_fn(mA, f_binary=self.f_binary,
                                           f_triple=self.f_triple,
-                                          minq=self.minq, minmass=self.minmass,
+                                          qmin=self.qmin, minmass=self.minmass,
                                           n=n)
 
             #generate stellar properties
@@ -1138,7 +1138,7 @@ class MultipleStarPopulation(TriplePopulation):
     @property
     def _properties(self):
         return ['f_binary', 'f_triple',
-                'minq', 'minmass',
+                'qmin', 'minmass',
                 'period_long_fn', 'period_short_fn',
                 'ecc_fn'] + super(MultipleStarPopulation, self)._properties
 

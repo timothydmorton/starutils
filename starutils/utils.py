@@ -156,7 +156,7 @@ def fbofm(M):
 
 
 def mult_masses(mA, f_binary=0.4, f_triple=0.12,
-                minmass=0.11, minq=0.1, n=1e5):
+                minmass=0.11, qmin=0.1, n=1e5):
     """Returns m1, m2, and m3 appropriate for TripleStarPopulation, given "primary" mass (most massive of system) and binary/triple fractions.
                 
 
