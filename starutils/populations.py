@@ -38,6 +38,8 @@ except ImportError:
     logging.warning('isochrones package not installed; population simulations will not be fully functional')
     DARTMOUTH = None
 
+BANDS = ['g','r','i','z','J','H','K','Kepler']
+
 class StarPopulation(object):
     def __init__(self,stars=None,distance=None,
                  max_distance=1000*u.pc,convert_absmags=True,
@@ -748,7 +750,7 @@ class BinaryPopulation(StarPopulation):
         
 class Simulated_BinaryPopulation(BinaryPopulation):
     def __init__(self,M=None,q_fn=None,P_fn=None,ecc_fn=None,
-                 n=1e4,ichrone=DARTMOUTH, qmin=0.1,
+                 n=1e4,ichrone=DARTMOUTH, qmin=0.1, bands=BANDS,
                  age=9.6,feh=0.0, minmass=0.12, **kwargs):
         """Simulates BinaryPopulation according to provide primary mass(es), generating functions, and stellar isochrone models.
 
@@ -796,16 +798,17 @@ class Simulated_BinaryPopulation(BinaryPopulation):
         if M is None:
             BinaryPopulation.__init__(self) #empty
         else:            
-            self.generate(M, age=age, feh=feh, ichrone=ichrone, n=n)
+            self.generate(M, age=age, feh=feh, ichrone=ichrone, 
+                          n=n, bands=bands, **kwargs)
 
     def generate(self, M, age=9.6, feh=0.0,
-                 ichrone=DARTMOUTH, n=1e4, **kwargs):
+                 ichrone=DARTMOUTH, n=1e4, bands=None, **kwargs):
         M2 = M * self.q_fn(n, qmin=max(self.qmin,self.minmass/M))
         P = self.P_fn(n)
         ecc = self.ecc_fn(n,P)
 
-        pri = ichrone(np.ones(n)*M, age, feh, return_df=True)
-        sec = ichrone(M2, age, feh, return_df=True)
+        pri = ichrone(np.ones(n)*M, age, feh, return_df=True, bands=bands)
+        sec = ichrone(M2, age, feh, return_df=True, bands=bands)
         
         BinaryPopulation.__init__(self, primary=pri, secondary=sec,
                                   period=P, ecc=ecc, **kwargs)
@@ -1009,7 +1012,8 @@ class MultipleStarPopulation(TriplePopulation):
                  period_long_fn=draw_raghavan_periods,
                  period_short_fn=draw_msc_periods,
                  period_short=None,
-                 ecc_fn=draw_eccs,
+                 ecc_fn=draw_eccs, 
+                 bands=BANDS,
                  orbpop=None, stars=None,
                  **kwargs):
         """A population of single, double, and triple stars, generated according to prescription.
@@ -1065,13 +1069,13 @@ class MultipleStarPopulation(TriplePopulation):
 
         if stars is None and mA is not None:
             self.generate(mA, age=age, feh=feh, n=n, ichrone=ichrone,
-                          orbpop=orbpop, **kwargs)
+                          orbpop=orbpop, bands=bands, **kwargs)
         else:
             TriplePopulation.__init__(self, stars=stars, orbpop=orbpop, **kwargs)
 
 
     def generate(self, mA, age=9.6, feh=0.0, n=1e5, ichrone=DARTMOUTH,
-                 orbpop=None, **kwargs):
+                 orbpop=None, bands=None, **kwargs):
 
             #star with m1 orbits (m2+m3).  So mA (most massive)
             # will correspond to either m1 or m2.
@@ -1081,9 +1085,9 @@ class MultipleStarPopulation(TriplePopulation):
                                           n=n)
 
             #generate stellar properties
-            primary = ichrone(m1,age,feh)
-            secondary = ichrone(m2,age,feh)
-            tertiary = ichrone(m3,age,feh)
+            primary = ichrone(m1,age,feh, bands=bands)
+            secondary = ichrone(m2,age,feh, bands=bands)
+            tertiary = ichrone(m3,age,feh, bands=bands)
 
             #clean up columns that become nan when called with mass=0
             # Remember, we want mass=0 and mags=inf when something doesn't exist
