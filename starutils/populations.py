@@ -1150,14 +1150,14 @@ class MultipleStarPopulation(TriplePopulation):
 class ColormatchMultipleStarPopulation(MultipleStarPopulation):
     def __init__(self, mags=None, colors=['JK'], colortol=0.1, 
                  mA=None, age=9.6, feh=0.0, n=2e4,
-                 starfield=None, **kwargs):
+                 starfield=None, stars=None, **kwargs):
         """Multiple star population constrained to match provided colors
 
         starfield is .h5 file of TRILEGAL simulation
 
         Parameters
         ----------
-        mags : dictionary
+        mags : dictionary (optional)
             Dictionary of magnitudes of total system.
 
         colors : list (optional)
@@ -1180,6 +1180,11 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
             a TRILEGAL simulation.  If string, then should be a filename
             of an .h5 file containing the TRILEGAL simulation, or can
             be a DataFrame directly.
+
+        stars : ``DataFrame`` of all properties
+            Can directly initialize with ``DataFrame``.  Be careful though,
+            because must pass the arguments appropriate to that simulation.
+
             
         kwargs passed to MultipleStarPopulation
         """
@@ -1192,7 +1197,9 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
         else:
             self.starfield = None
 
-        if mags is None:
+        if stars is not None:
+            MultipleStarPopulation.__init__(self, stars=stars, **kwargs)
+        elif mags is None:
             MultipleStarPopulation.__init__(self, **kwargs)
         else:
             self.generate(mA=mA, age=age, feh=feh, n=n, **kwargs)
@@ -1291,6 +1298,9 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
         df_short = df_short.iloc[:n]
         orbpop = TripleOrbitPopulation_FromDF(df_long, df_short)
         
+        stars = stars.reset_index()
+        stars.drop('index', axis=1, inplace=True)
+
         MultipleStarPopulation.__init__(self, stars=stars, orbpop=orbpop, **kwargs)
 
         return self

@@ -23,7 +23,7 @@ def test_multiple(filename=os.path.join(TMP,'test_multiple.h5')):
 
 def test_colormatch(filename=os.path.join(TMP,'test_colormatch.h5')):
     mags = {'H': 10.211, 'J': 10.523, 'K': 10.152000000000001} #Kepler-22
-    pop = ColormatchMultipleStarPopulation(mags, m1=(1,0.1),
+    pop = ColormatchMultipleStarPopulation(mags, mA=(1,0.1),
                                            age=(9.7,0.1),
                                            feh=(0,0.1), n=100)
     pop.save_hdf(filename, overwrite=True)
