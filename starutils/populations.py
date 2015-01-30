@@ -549,6 +549,10 @@ class StarPopulation(object):
             df[name] = c.ok
         return df
 
+    @property
+    def _properties(self):
+        return ['name']
+
     def save_hdf(self,filename,path='',properties=None,
                  overwrite=False, append=False):
         """Saves to .h5 file.
@@ -564,7 +568,9 @@ class StarPopulation(object):
 
         if properties is None:
             properties = {}
-        properties['name'] = self.name
+
+        for prop in self._properties:
+            properties[prop] = getattr(self, prop)
         
         self.stars.to_hdf(filename,'{}/stars'.format(path))
         self.constraint_df.to_hdf(filename,'{}/constraints'.format(path))
@@ -814,12 +820,15 @@ class Simulated_BinaryPopulation(BinaryPopulation):
                                   period=P, ecc=ecc, **kwargs)
         return self
 
+    @property
+    def _properties(self):
+        return ['q_fn', 'qmin', 'P_fn', 'ecc_fn', 'minmass']
 
     def save_hdf(self, filename, path='', properties=None, **kwargs):
         if properties is None:
             properties = {}
 
-        for prop in ['q_fn', 'qmin', 'P_fn', 'ecc_fn', 'minmass']:
+        for prop in self._properties:
             properties[prop] = getattr(self, prop)
             
         BinaryPopulation.save_hdf(self, filename, path=path,
@@ -1138,14 +1147,18 @@ class MultipleStarPopulation(TriplePopulation):
 
             return self
 
+    @property
+    def _properties(self):
+        return ['f_binary', 'f_triple',
+                'minq', 'minmass',
+                'period_long_fn', 'period_short_fn',
+                'ecc_fn']
+
     def save_hdf(self, filename, path='', properties=None, **kwargs):
         if properties is None:
             properties = {}
 
-        for prop in ['f_binary', 'f_triple',
-                     'minq', 'minmass',
-                     'period_long_fn', 'period_short_fn',
-                     'ecc_fn']:
+        for prop in self._properties:
             properties[prop] = getattr(self,prop)
 
         TriplePopulation.save_hdf(self, filename, path=path,
@@ -1309,11 +1322,15 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
 
         return self
 
+    @property
+    def _properties(self):
+        return ['mags', 'colors', 'colortol', 'starfield']
+
     def save_hdf(self, filename, path='', properties=None, **kwargs):
         if properties is None:
             properties = {}
         
-        for prop in ['mags', 'colors', 'colortol', 'starfield']:
+        for prop in self._properties:
             properties[prop] = getattr(self, prop)
 
         MultipleStarPopulation.save_hdf(self, filename, path=path, 
@@ -1374,11 +1391,15 @@ class BGStarPopulation(StarPopulation):
             raise ValueError('dmag is not defined because primary mags are not defined for this population.')
         return self.stars['{}_mag'.format(band)] - self.mags[band]
         
+    @property
+    def _properties(self):
+        return ['mags', '_maxrad', 'density']        
+
     def save_hdf(self,filename,path='', properties=None, **kwargs):
         if properties is None:
             properties = {}
 
-        for prop in ['mags', '_maxrad', 'density']:
+        for prop in self._properties:
             properties[prop] = getattr(self, prop)
 
         StarPopulation.save_hdf(self,filename,path=path,properties=properties,
@@ -1453,10 +1474,14 @@ class BGStarPopulation_TRILEGAL(BGStarPopulation):
             BGStarPopulation.__init__(self,stars,mags=mags,maxrad=maxrad,
                                       density=density,name=name)
 
+    @property
+    def _properties(self):
+        return ['trilegal_args']
 
     def save_hdf(self,filename,path='', properties=None, **kwargs):
         if properties is None:
             properties = {}
+
         properties['trilegal_args'] = self.trilegal_args
         BGStarPopulation.save_hdf(self,filename,path=path,
                                   properties=properties, **kwargs)
