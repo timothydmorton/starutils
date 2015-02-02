@@ -1008,7 +1008,7 @@ class MultipleStarPopulation(TriplePopulation):
                  multmass_fn=mult_masses,
                  period_long_fn=draw_raghavan_periods,
                  period_short_fn=draw_msc_periods,
-                 period_short=None,
+                 period_short=None, period_long=None,
                  ecc_fn=draw_eccs, 
                  bands=BANDS,
                  orbpop=None, stars=None,
@@ -1062,11 +1062,16 @@ class MultipleStarPopulation(TriplePopulation):
         self.multmass_fn = multmass_fn
         self.period_long_fn = period_long_fn
         self.period_short_fn = period_short_fn
+        if period_long is not None:
+            self.period_long_fn = None
+        if period_short is not None:
+            self.period_short_fn = None
         self.ecc_fn = ecc_fn
 
         if stars is None and mA is not None:
             self.generate(mA, age=age, feh=feh, n=n, ichrone=ichrone,
-                          orbpop=orbpop, bands=bands, **kwargs)
+                          orbpop=orbpop, bands=bands, period_long=period_long,
+                          period_short=period_short,**kwargs)
         else:
             TriplePopulation.__init__(self, stars=stars, orbpop=orbpop, **kwargs)
 
@@ -1097,8 +1102,8 @@ class MultipleStarPopulation(TriplePopulation):
             secondary['mass'][no_secondary] = 0
             tertiary['mass'][no_tertiary] = 0
 
-            if 'period_short' not in kwargs:
-                if 'period_long' not in kwargs:
+            if kwargs['period_short'] is None:
+                if kwargs['period_long'] is None:
                     period_1 = self.period_long_fn(n)
                     period_2 = self.period_short_fn(n)
                     kwargs['period_short'] = np.minimum(period_1, period_2)
@@ -1113,7 +1118,7 @@ class MultipleStarPopulation(TriplePopulation):
                     n_bad = bad.sum()
                     kwargs['period_short'][bad] = kwargs['period_short'][inds[:n_bad]]
             else:
-                if 'period_long' not in kwargs:
+                if kwargs['period_long'] is None:
                     kwargs['period_long'] = self.period_long_fn(n)
 
                     #correct any long periods that are shorter than period_short
@@ -1122,7 +1127,6 @@ class MultipleStarPopulation(TriplePopulation):
                     np.random.shuffle(inds)
                     n_bad = bad.sum()
                     kwargs['period_long'][bad] = kwargs['period_long'][inds[:n_bad]]
-
 
             if 'ecc_short' not in kwargs:
                 kwargs['ecc_short'] = self.ecc_fn(n, kwargs['period_short'])
