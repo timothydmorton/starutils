@@ -134,6 +134,15 @@ def addmags(*mags):
         tot += 10**(-0.4*mag)
     return -2.5*np.log10(tot)
 
+def fluxfrac(*mags):
+    """Returns fraction of total flux in first argument, assuming all are magnitudes
+    """
+    Ftot = 0
+    for mag in mags:
+        Ftot += 10**(-0.4*mag)
+    F1 = 10**(-0.4*mags[0])
+    return F1/Ftot
+
 def dfromdm(dm):
     if np.size(dm)>1:
         dm = np.atleast_1d(dm)
