@@ -276,6 +276,12 @@ class StarPopulation(object):
             xvals = self.stars[propx].iloc[inds]
             yvals = self.stars[propy].iloc[inds]
 
+        if propx=='depth' and hasattr(self,'depth'):
+            xvals *= self.dilution_factor[inds]
+        if propy=='depth' and hasattr(self,'depth'):
+            yvals *= self.dilution_factor[inds]
+        
+
         if logx:
             xvals = np.log10(xvals)
         if logy:
@@ -307,6 +313,9 @@ class StarPopulation(object):
             vals = self.selected[prop].iloc[inds]
         else:
             vals = self.stars[prop].iloc[inds]
+
+        if prop=='depth' and hasattr(self,'depth'):
+            vals *= self.dilution_factor[inds]
 
         if log:
             h = plt.hist(np.log10(vals),**kwargs)
