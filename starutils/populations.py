@@ -161,6 +161,10 @@ class StarPopulation(object):
         raise NotImplementedError
 
     @property
+    def is_ruled_out(self):
+        return self.distok.sum() < 2
+
+    @property
     def magnitudes(self):
         bands = []
         for c in self.stars.columns:
@@ -227,7 +231,7 @@ class StarPopulation(object):
             self.selectfrac = self.countok.sum()/n
 
 
-    def prophist2d(self,propx,propy,
+    def prophist2d(self,propx,propy, mask=None,
                    logx=False,logy=False,inds=None,
                    fig=None,selected=False,**kwargs):
         """Makes a 2d density histogram of two given properties
@@ -240,6 +244,10 @@ class StarPopulation(object):
             Desired indices of ``self.stars`` to plot.  If ``None``,
             then all is assumed.
 
+        mask : ndarray, optional
+            Boolean mask (True is good) to say which indices to plot.
+            Will override inds keyword.
+
         fig : None or int, optional
             Argument passed to ``plotutils.setfig`` function.
 
@@ -251,17 +259,23 @@ class StarPopulation(object):
         kwargs :
             Keyword arguments passed to ``plot2dhist`` function.
         """
-        if inds is None:
+        if mask is not None:
+            inds = np.where(mask)[0]
+        elif inds is None:
             if selected:
-                inds = np.arange(len(self.selected))
+                #inds = np.arange(len(self.selected))
+                inds = self.selected.index
             else:
-                inds = np.arange(len(self.stars))
+                #inds = np.arange(len(self.stars))
+                inds = self.stars.index
+
         if selected:
-            xvals = self[propx].iloc[inds]
-            yvals = self[propy].iloc[inds]
+            xvals = self.selected[propx].iloc[inds]
+            yvals = self.selected[propy].iloc[inds]
         else:
             xvals = self.stars[propx].iloc[inds]
             yvals = self.stars[propy].iloc[inds]
+
         if logx:
             xvals = np.log10(xvals)
         if logy:
@@ -273,18 +287,24 @@ class StarPopulation(object):
         
 
     def prophist(self,prop,fig=None,log=False,inds=None,
+                 mask=None,
                  selected=False,**kwargs):
         """Plots a histogram of desired property
         """
         
         setfig(fig)
-        if inds is None:
+        if mask is not None:
+            inds = np.where(mask)[0]
+        elif inds is None:
             if selected:
-                inds = np.arange(len(self.selected))
+                #inds = np.arange(len(self.selected))
+                inds = self.selected.index
             else:
-                inds = np.arange(len(self.stars))
+                #inds = np.arange(len(self.stars))
+                inds = self.stars.index
+
         if selected:
-            vals = self[prop].iloc[inds]
+            vals = self.selected[prop].iloc[inds]
         else:
             vals = self.stars[prop].iloc[inds]
 
