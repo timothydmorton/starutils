@@ -2,12 +2,11 @@ from __future__ import print_function,division
 import numpy as np
 import logging
 
+from hashutils import hasharray, hashcombine, hashdict
+
 class ConstraintDict(dict):
     def __hash__(self):
-        hashint = 0
-        for name in self:
-            hashint += self[name].__hash__()
-        return hashint
+        return hashdict(self)
 
 class Constraint(object):
     def __init__(self,mask,name='',**kwargs):
@@ -25,11 +24,7 @@ class Constraint(object):
         return not self.__eq__(other)
 
     def __hash__(self):
-        key = 0
-        key += hash(self.name)
-        key += hash(self.wok[0:100].__str__())
-        key += hash(self.ok.sum())
-        return key
+        return hashcombine(hash(self.name), hasharray(self.ok))
 
     def __str__(self):
         return self.name

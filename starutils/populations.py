@@ -119,6 +119,10 @@ class StarPopulation(object):
     def __getitem__(self,prop):
         return self.selected[prop]
 
+    def __hash__(self):
+        return hashcombine(self.constraints, self.hidden_constraints,
+                           hasharray(self.stars))
+    
     @property
     def magnitudes(self):
         bands = []
