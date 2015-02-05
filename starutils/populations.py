@@ -35,7 +35,7 @@ from .trilegal import get_trilegal
 try:
     from isochrones.dartmouth import Dartmouth_Isochrone
     DARTMOUTH = Dartmouth_Isochrone()
-    DARTMOUTH.radius(1,9.6,0.0) #first call takes a long time for some reason
+    #DARTMOUTH.radius(1,9.6,0.0) #first call takes a long time for some reason
 except ImportError:
     logging.warning('isochrones package not installed; population simulations will not be fully functional')
     DARTMOUTH = None
@@ -1120,7 +1120,9 @@ class MultipleStarPopulation(TriplePopulation):
                                           f_triple=self.f_triple,
                                           qmin=self.qmin, minmass=self.minmass,
                                           n=n)
-
+            #reset n if need be
+            n = len(m1)
+            
             #generate stellar properties
             primary = ichrone(m1,age,feh, bands=bands)
             secondary = ichrone(m2,age,feh, bands=bands)
