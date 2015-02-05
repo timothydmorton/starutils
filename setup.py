@@ -1,7 +1,7 @@
 from setuptools import setup, Extension, find_packages
 from Cython.Build import cythonize
 from Cython.Distutils import build_ext
-import numpy
+import os, sys
 
 def readme():
     with open('README.rst') as f:
@@ -16,9 +16,23 @@ else:
     import builtins
 builtins.__STARUTILS_SETUP__ = True
 import starutils
+version = starutils.__version__
+
+
+# Publish the library to PyPI.
+if "publish" in sys.argv[-1]:
+    os.system("python setup.py sdist upload")
+    sys.exit()
+
+# Push a new tag to GitHub.
+if "tag" in sys.argv:
+    os.system("git tag -a {0} -m 'version {0}'".format(version))
+    os.system("git push --tags")
+    sys.exit()
+
 
 setup(name = "starutils",
-      version = starutils.__version__,
+      version = version,
       description = "Useful things for playing with simulated star populations.",
       long_description = readme(),
       author = "Timothy D. Morton",

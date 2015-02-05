@@ -44,6 +44,9 @@ def draw_pers_eccs(n,**kwargs):
     eccs = draw_eccs(n,pers,**kwargs)
     return pers,eccs
 
+def flat_massratio(n, qmin=0.1, qmax=1.):
+    return rand.uniform(size=n)*(qmax - qmin) + qmin
+
 def flat_massratio_fn(qmin=0.1,qmax=1.):
     def fn(n):
         return rand.uniform(size=n)*(qmax - qmin) + qmin
@@ -120,7 +123,7 @@ def withinroche(semimajors,M1,R1,M2,R2):
 def semimajor(P,mstar=1):
     """Period in days, mstar in solar masses
     """
-    return ((P*DAY/2/pi)**2*G*mstar*MSUN)**(1./3)/AU
+    return ((P*DAY/2/np.pi)**2*G*mstar*MSUN)**(1./3)/AU
 
 def period_from_a(a,mstar):
     return np.sqrt(4*np.pi**2*(a*AU)**3/(G*mstar*MSUN))/DAY
@@ -131,8 +134,17 @@ def addmags(*mags):
         tot += 10**(-0.4*mag)
     return -2.5*np.log10(tot)
 
+def fluxfrac(*mags):
+    """Returns fraction of total flux in first argument, assuming all are magnitudes
+    """
+    Ftot = 0
+    for mag in mags:
+        Ftot += 10**(-0.4*mag)
+    F1 = 10**(-0.4*mags[0])
+    return F1/Ftot
+
 def dfromdm(dm):
-    if size(dm)>1:
+    if np.size(dm)>1:
         dm = np.atleast_1d(dm)
     return 10**(1+dm/5)
 
@@ -153,7 +165,7 @@ def fbofm(M):
 
 
 def mult_masses(mA, f_binary=0.4, f_triple=0.12,
-                minmass=0.11, minq=0.1, n=1e5):
+                minmass=0.11, qmin=0.1, n=1e5):
     """Returns m1, m2, and m3 appropriate for TripleStarPopulation, given "primary" mass (most massive of system) and binary/triple fractions.
                 
 
