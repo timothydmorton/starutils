@@ -160,7 +160,7 @@ class StarPopulation(object):
         return self.selected[prop]
 
     def __hash__(self):
-        return hashcombine(self.constraints, self.hidden_constraints,
+        return hashcombine(self.constraints,
                            hashdf(self.stars), self.orbpop)
     
     def generate(self, *args, **kwargs):
