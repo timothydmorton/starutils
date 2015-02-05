@@ -20,7 +20,7 @@ from plotutils import setfig,plot2dhist
 
 from simpledist import distributions as dists
 
-from hashutils import hasharray, hashcombine, hashdict
+from hashutils import hashcombine, hashdict, hashdf
 
 from .constraints import Constraint,UpperLimit,LowerLimit,JointConstraintOr
 from .constraints import ConstraintDict,MeasurementConstraint,RangeConstraint
@@ -161,7 +161,7 @@ class StarPopulation(object):
 
     def __hash__(self):
         return hashcombine(self.constraints, self.hidden_constraints,
-                           hasharray(self.stars), self.orbpop)
+                           hashdf(self.stars), self.orbpop)
     
     def generate(self, *args, **kwargs):
         raise NotImplementedError
