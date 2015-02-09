@@ -50,6 +50,6 @@ setup(name = "starutils",
         'Topic :: Scientific/Engineering :: Astronomy'
         ],
       install_requires=['pandas>=0.13','plotutils','orbitutils',
-                        'simpledist','isochrones'],
+                        'simpledist','isochrones','hashutils'],
       zip_safe=False
 ) 

@@ -20,6 +20,8 @@ from plotutils import setfig,plot2dhist
 
 from simpledist import distributions as dists
 
+from hashutils import hashcombine, hashdict, hashdf
+
 from .constraints import Constraint,UpperLimit,LowerLimit,JointConstraintOr
 from .constraints import ConstraintDict,MeasurementConstraint,RangeConstraint
 from .constraints import ContrastCurveConstraint,VelocityContrastCurveConstraint
@@ -33,7 +35,7 @@ from .trilegal import get_trilegal
 try:
     from isochrones.dartmouth import Dartmouth_Isochrone
     DARTMOUTH = Dartmouth_Isochrone()
-    DARTMOUTH.radius(1,9.6,0.0) #first call takes a long time for some reason
+    #DARTMOUTH.radius(1,9.6,0.0) #first call takes a long time for some reason
 except ImportError:
     logging.warning('isochrones package not installed; population simulations will not be fully functional')
     DARTMOUTH = None
@@ -157,6 +159,10 @@ class StarPopulation(object):
     def __getitem__(self,prop):
         return self.selected[prop]
 
+    def __hash__(self):
+        return hashcombine(self.constraints,
+                           hashdf(self.stars), self.orbpop)
+    
     def generate(self, *args, **kwargs):
         raise NotImplementedError
 
@@ -1118,7 +1124,9 @@ class MultipleStarPopulation(TriplePopulation):
                                           f_triple=self.f_triple,
                                           qmin=self.qmin, minmass=self.minmass,
                                           n=n)
-
+            #reset n if need be
+            n = len(m1)
+            
             #generate stellar properties
             primary = ichrone(m1,age,feh, bands=bands)
             secondary = ichrone(m2,age,feh, bands=bands)
