@@ -276,6 +276,8 @@ class StarPopulation(object):
             xvals = self.stars[propx].iloc[inds]
             yvals = self.stars[propy].iloc[inds]
 
+        #hack for EclipsePopulations...
+        #TODO: reorganize.
         if propx=='depth' and hasattr(self,'depth'):
             xvals *= self.dilution_factor[inds]
         if propy=='depth' and hasattr(self,'depth'):
@@ -287,6 +289,8 @@ class StarPopulation(object):
         if logy:
             yvals = np.log10(yvals)
 
+        logging.debug(xvals)
+        logging.debug(yvals)
         plot2dhist(xvals,yvals,fig=fig,**kwargs)
         plt.xlabel(propx)
         plt.ylabel(propy)
