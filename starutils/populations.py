@@ -1296,12 +1296,12 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
 
         #only permit mass, age, feh values allowed by ichrone
         pct = 0.05 #pct distance from "edges" of ichrone interpolation
-        ok = ((mass < ichrone.minmass*(1+pct)) & (mass > ichrone.minmass*(1-pct)) &
+        bad = ((mass < ichrone.minmass*(1+pct)) & (mass > ichrone.minmass*(1-pct)) &
               (age < ichrone.minage*(1+pct)) & (age > ichrone.minage*(1-pct)) &
-              (feh < ichrone.minfeh + pct)) & (feh > ichrone.minfeh-pct)))
+              (feh < ichrone.minfeh + pct) & (feh > ichrone.minfeh-pct))
 
-        if ok.sum() > 0:
-            logging.warning('{:.2f}% of desired properties outside range of isochrone'.format(ok.sum()/1e5))
+        if bad.sum() > 0:
+            logging.warning('{:.2f}% of desired properties outside range of isochrone'.format(bad.sum()/1e5))
 
         mass = mass[ok]
         age = age[ok]
