@@ -67,7 +67,7 @@ def draw_eccs(n,per=10,binsize=0.1,fuzz=0.05,maxecc=0.97):
         if np.size(per)>1:
             per = per[0]
         if per==0:
-            es = 0
+            es = np.zeros(n)
         else:
             ne=0
             while ne<10:
