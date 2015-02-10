@@ -66,20 +66,18 @@ def draw_eccs(n,per=10,binsize=0.1,fuzz=0.05,maxecc=0.97):
     if np.size(per) == 1 or np.std(np.atleast_1d(per))==0:
         if np.size(per)>1:
             per = per[0]
-        ne=0
-        while ne<10:
-            #if per > 25:
-            #    w = where((TRIPLEPERS>25) & (TRIPLEPERS<300))
-            #else:
-            #    w = where(abs(TRIPLEPERS-per)<binsize/2.)
-            mask = np.absolute(np.log10(MSC_TRIPLEPERS)-np.log10(per))<binsize/2.
-            es = MSC_TRIPDATA.e[mask]
-            ne = len(es)
-            if ne<10:
-                binsize*=1.1
-        inds = rand.randint(ne,size=n)
-        es = es[inds] * (1 + rand.normal(size=n)*fuzz)
-    
+        if per==0:
+            es = 0
+        else:
+            ne=0
+            while ne<10:
+                mask = np.absolute(np.log10(MSC_TRIPLEPERS)-np.log10(per))<binsize/2.
+                es = MSC_TRIPDATA.e[mask]
+                ne = len(es)
+                if ne<10:
+                    binsize*=1.1
+            inds = rand.randint(ne,size=n)
+            es = es[inds] * (1 + rand.normal(size=n)*fuzz)    
     else:
         longmask = (per > 25)
         shortmask = (per <= 25)
