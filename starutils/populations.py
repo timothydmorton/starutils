@@ -1303,9 +1303,9 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
         if bad.sum() > 0:
             logging.warning('{:.2f}% of desired properties outside range of isochrone'.format(bad.sum()/1e5))
 
-        mA = mA[ok]
-        age = age[ok]
-        feh = feh[ok]
+        mA = mA[~bad]
+        age = age[~bad]
+        feh = feh[~bad]
 
         n_adapt = n
         while len(stars) < n:
