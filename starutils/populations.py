@@ -1125,6 +1125,8 @@ class MultipleStarPopulation(TriplePopulation):
             #reset n if need be
             n = len(m1)
             
+            feh = np.atleast_1d(feh)
+
             #generate stellar properties
             primary = ichrone(m1,age,feh, bands=bands)
             secondary = ichrone(m2,age,feh, bands=bands)
@@ -1189,6 +1191,7 @@ class MultipleStarPopulation(TriplePopulation):
 class ColormatchMultipleStarPopulation(MultipleStarPopulation):
     def __init__(self, mags=None, colors=['JK'], colortol=0.1, 
                  mA=None, age=9.6, feh=0.0, n=2e4,
+                 ichrone=DARTMOUTH,
                  starfield=None, stars=None, **kwargs):
         """Multiple star population constrained to match provided colors
 
@@ -1241,10 +1244,11 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
         elif mags is None:
             MultipleStarPopulation.__init__(self, **kwargs)
         else:
-            self.generate(mA=mA, age=age, feh=feh, n=n, **kwargs)
+            self.generate(mA=mA, age=age, feh=feh, n=n, ichrone=ichrone,
+                          **kwargs)
 
 
-    def generate(self, mA=None, age=9.6, feh=0.0,
+    def generate(self, mA=None, age=9.6, feh=0.0, ichrone=DARTMOUTH,
                  n=2e4, **kwargs):
         n = int(n)
 
@@ -1290,11 +1294,24 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
             if np.size(feh)==1:
                 feh = feh*np.ones(1)
 
+        #only permit mass, age, feh values allowed by ichrone
+        pct = 0.05 #pct distance from "edges" of ichrone interpolation
+        ok = ((mass < ichrone.minmass*(1+pct)) & (mass > ichrone.minmass*(1-pct)) &
+              (age < ichrone.minage*(1+pct)) & (age > ichrone.minage*(1-pct)) &
+              (feh < ichrone.minfeh + pct)) & (feh > ichrone.minfeh-pct)))
+
+        if ok.sum() > 0:
+            logging.warning('{:.2f}% of desired properties outside range of isochrone'.format(ok.sum()/1e5))
+
+        mass = mass[ok]
+        age = age[ok]
+        feh = feh[ok]
 
         n_adapt = n
         while len(stars) < n:
 
             inds = np.random.randint(len(mA),size=n_adapt)
+
             pop = MultipleStarPopulation(mA=mA[inds], age=age[inds], feh=feh[inds], 
                                          n=n_adapt, **kwargs)
 
