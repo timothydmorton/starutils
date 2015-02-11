@@ -1323,7 +1323,8 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
             inds = np.random.randint(len(mA),size=n_adapt)
 
             pop = MultipleStarPopulation(mA=mA[inds], age=age[inds], feh=feh[inds], 
-                                         n=n_adapt, **kwargs)
+                                         n=n_adapt, convert_absmags=False,
+                                         **kwargs)
 
             #if mags and colors provided, enforce that everything 
             # matches given colors
@@ -1372,7 +1373,14 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
         stars.drop('index', axis=1, inplace=True)
 
         try:
-            stars['distance'] = dfromdm(self.mags['K'] - stars['K_mag'])
+            distance = dfromdm(self.mags['K'] - stars['K_mag'])
+            distmod = distancemodulus(distance)
+            for col in stars.columns:
+                if re.search('_mag',col):
+                    stars[col] += distmod            
+            stars['distance'] = distance
+            stars['distmod'] = distmod
+
         except KeyError:
             logging.warning('K mag not in one of either mags or stars; distances will not be correct')
 
