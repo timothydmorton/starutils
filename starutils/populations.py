@@ -1373,6 +1373,7 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
         stars.drop('index', axis=1, inplace=True)
 
         try:
+            #this ok now?
             distance = dfromdm(self.mags['K'] - stars['K_mag'])
             distmod = distancemodulus(distance)
             for col in stars.columns:
