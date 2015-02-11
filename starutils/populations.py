@@ -140,6 +140,11 @@ class StarPopulation(object):
     def dRV(self,dt):
         return self.orbpop.dRV(dt)
 
+    def dmag(self, band):
+        if not hasattr(self, 'mags'):
+            raise ValueError('This population does not have a "mags" attribute; dmags is meaningless.')
+        return self.stars['{}_mag'.format(band)] - self.mags[band]
+
 
     def append(self, other):
         """Appends stars from another StarPopulations, in place.
