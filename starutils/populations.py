@@ -46,7 +46,7 @@ BANDS = ['g','r','i','z','J','H','K','Kepler']
 class StarPopulation(object):
     def __init__(self,stars=None,distance=None,
                  max_distance=1000*u.pc,convert_absmags=True,
-                 name='', orbpop=None):
+                 name='', orbpop=None, mags=None):
         """A population of stars.  Initialized with no constraints.
 
         Intended to be subclassed.  
@@ -60,8 +60,8 @@ class StarPopulation(object):
 
         distance : ``Quantity`` or float, optional
             If not ``None``, then distances of stars are assigned
-            randomly out to max_distance.  If float,
-            then assumed to be in parsec.  Or, if stars already 
+            randomly out to max_distance (or by comparing to mags).  
+            If float, then assumed to be in parsec.  Or, if stars already 
             has a distance column, this is ignored.
 
         max_distance : ``Quantity`` or float, optional
@@ -74,6 +74,9 @@ class StarPopulation(object):
             to apparent magnitudes based on distance.  If ``False,``
             then magnitudes will be kept as-is.  Ignored if stars already
             has a distance column.
+
+        orbpop : ``OrbitPopulation``
+
 
         """
         self.orbpop = orbpop
@@ -1367,6 +1370,11 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
         
         stars = stars.reset_index()
         stars.drop('index', axis=1, inplace=True)
+
+        try:
+            stars['distance'] = dfromdm(self.mags['K'] - stars['K_mag'])
+        except KeyError:
+            logging.warning('K mag not in one of either mags or stars; distances will not be correct')
 
         MultipleStarPopulation.__init__(self, stars=stars, orbpop=orbpop, **kwargs)
 
