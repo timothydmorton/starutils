@@ -128,6 +128,18 @@ class StarPopulation(object):
         
         self._apply_all_constraints()
 
+    @property
+    def Rsky(self):
+        r = (self.orbpop.Rsky/self.distance)
+        return r.to('arcsec',equivalencies=u.dimensionless_angles())
+
+    @property
+    def RV(self):
+        return self.orbpop.RV
+
+    def dRV(self,dt):
+        return self.orbpop.dRV(dt)
+
 
     def append(self, other):
         """Appends stars from another StarPopulations, in place.
@@ -753,18 +765,6 @@ class BinaryPopulation(StarPopulation):
         return frac, frac/np.sqrt(nbinaries)
         
     @property
-    def Rsky(self):
-        r = (self.orbpop.Rsky/self.distance)
-        return r.to('arcsec',equivalencies=u.dimensionless_angles())
-
-    @property
-    def RV(self):
-        return self.orbpop.RV
-
-    def dRV(self,dt):
-        return self.orbpop.dRV(dt)
-
-    @property
     def Plong(self):
         return self.orbpop.P
 
@@ -843,6 +843,7 @@ class Simulated_BinaryPopulation(BinaryPopulation):
 
     def generate(self, M, age=9.6, feh=0.0,
                  ichrone=DARTMOUTH, n=1e4, bands=None, **kwargs):
+        n = int(n)
         M2 = M * self.q_fn(n, qmin=max(self.qmin,self.minmass/M))
         P = self.P_fn(n)
         ecc = self.ecc_fn(n,P)
@@ -1115,70 +1116,70 @@ class MultipleStarPopulation(TriplePopulation):
 
     def generate(self, mA, age=9.6, feh=0.0, n=1e5, ichrone=DARTMOUTH,
                  orbpop=None, bands=None, **kwargs):
+        n = int(n)
+        #star with m1 orbits (m2+m3).  So mA (most massive)
+        # will correspond to either m1 or m2.
+        m1, m2, m3 = self.multmass_fn(mA, f_binary=self.f_binary,
+                                      f_triple=self.f_triple,
+                                      qmin=self.qmin, minmass=self.minmass,
+                                      n=n)
+        #reset n if need be
+        n = len(m1)
 
-            #star with m1 orbits (m2+m3).  So mA (most massive)
-            # will correspond to either m1 or m2.
-            m1, m2, m3 = self.multmass_fn(mA, f_binary=self.f_binary,
-                                          f_triple=self.f_triple,
-                                          qmin=self.qmin, minmass=self.minmass,
-                                          n=n)
-            #reset n if need be
-            n = len(m1)
-            
-            feh = np.atleast_1d(feh)
+        feh = np.atleast_1d(feh)
 
-            #generate stellar properties
-            primary = ichrone(m1,age,feh, bands=bands)
-            secondary = ichrone(m2,age,feh, bands=bands)
-            tertiary = ichrone(m3,age,feh, bands=bands)
+        #generate stellar properties
+        primary = ichrone(m1,age,feh, bands=bands)
+        secondary = ichrone(m2,age,feh, bands=bands)
+        tertiary = ichrone(m3,age,feh, bands=bands)
 
-            #clean up columns that become nan when called with mass=0
-            # Remember, we want mass=0 and mags=inf when something doesn't exist
-            no_secondary = (m2==0)
-            no_tertiary = (m3==0)
-            for c in secondary.columns: #
-                if re.search('_mag',c):
-                    secondary[c][no_secondary] = np.inf
-                    tertiary[c][no_tertiary] = np.inf
-            secondary['mass'][no_secondary] = 0
-            tertiary['mass'][no_tertiary] = 0
+        #clean up columns that become nan when called with mass=0
+        # Remember, we want mass=0 and mags=inf when something doesn't exist
+        no_secondary = (m2==0)
+        no_tertiary = (m3==0)
+        for c in secondary.columns: #
+            if re.search('_mag',c):
+                secondary[c][no_secondary] = np.inf
+                tertiary[c][no_tertiary] = np.inf
+        secondary['mass'][no_secondary] = 0
+        tertiary['mass'][no_tertiary] = 0
 
-            if kwargs['period_short'] is None:
-                if kwargs['period_long'] is None:
-                    period_1 = self.period_long_fn(n)
-                    period_2 = self.period_short_fn(n)
-                    kwargs['period_short'] = np.minimum(period_1, period_2)
-                    kwargs['period_long'] = np.maximum(period_1, period_2)
-                else:
-                    kwargs['period_short'] = self.period_short_fn(n)
-
-                    #correct any short periods that are longer than period_long
-                    bad = kwargs['period_short'] > kwargs['period_long']
-                    inds = np.where(~bad)[0]
-                    np.random.shuffle(inds)
-                    n_bad = bad.sum()
-                    kwargs['period_short'][bad] = kwargs['period_short'][inds[:n_bad]]
+        if kwargs['period_short'] is None:
+            if kwargs['period_long'] is None:
+                period_1 = self.period_long_fn(n)
+                period_2 = self.period_short_fn(n)
+                kwargs['period_short'] = np.minimum(period_1, period_2)
+                kwargs['period_long'] = np.maximum(period_1, period_2)
             else:
-                if kwargs['period_long'] is None:
-                    kwargs['period_long'] = self.period_long_fn(n)
+                kwargs['period_short'] = self.period_short_fn(n)
 
-                    #correct any long periods that are shorter than period_short
-                    bad = kwargs['period_long'] < kwargs['period_short']
-                    inds = np.where(~bad)[0]
-                    np.random.shuffle(inds)
-                    n_bad = bad.sum()
-                    kwargs['period_long'][bad] = kwargs['period_long'][inds[:n_bad]]
+                #correct any short periods that are longer than period_long
+                bad = kwargs['period_short'] > kwargs['period_long']
+                inds = np.where(~bad)[0]
+                np.random.shuffle(inds)
+                n_bad = bad.sum()
+                kwargs['period_short'][bad] = kwargs['period_short'][inds[:n_bad]]
+        else:
+            if kwargs['period_long'] is None:
+                kwargs['period_long'] = self.period_long_fn(n)
 
-            if 'ecc_short' not in kwargs:
-                kwargs['ecc_short'] = self.ecc_fn(n, kwargs['period_short'])
-            if 'ecc_long' not in kwargs:
-                kwargs['ecc_long'] = self.ecc_fn(n, kwargs['period_long'])
+                #correct any long periods that are shorter than period_short
+                bad = kwargs['period_long'] < kwargs['period_short']
+                inds = np.where(~bad)[0]
+                np.random.shuffle(inds)
+                n_bad = bad.sum()
+                kwargs['period_long'][bad] = kwargs['period_long'][inds[:n_bad]]
 
-            TriplePopulation.__init__(self, primary=primary, 
-                                      secondary=secondary, tertiary=tertiary,
-                                      orbpop=orbpop, **kwargs)
+        if 'ecc_short' not in kwargs:
+            kwargs['ecc_short'] = self.ecc_fn(n, kwargs['period_short'])
+        if 'ecc_long' not in kwargs:
+            kwargs['ecc_long'] = self.ecc_fn(n, kwargs['period_long'])
 
-            return self
+        TriplePopulation.__init__(self, primary=primary, 
+                                  secondary=secondary, tertiary=tertiary,
+                                  orbpop=orbpop, **kwargs)
+
+        return self
 
     @property
     def _properties(self):
@@ -1317,7 +1318,10 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
 
             #if mags and colors provided, enforce that everything 
             # matches given colors
-            cond = np.ones(n_adapt).astype(bool)
+            
+            cond = (~np.isnan(pop['mass_A']) & (~np.isnan(pop['mass_B']))
+                     & (~np.isnan(pop['mass_C'])))
+            #cond = np.ones(n_adapt).astype(bool)
             for c in self.colors:
                 m = re.search('^(\w)(\w)$',c)                
                 if m:
