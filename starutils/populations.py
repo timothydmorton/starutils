@@ -1015,6 +1015,12 @@ class TriplePopulation(StarPopulation):
 
         StarPopulation.__init__(self, stars=stars, orbpop=orbpop, **kwargs)
 
+    def dmag(self, band):
+        m1 = self.stars['{}_mag_A'.format(band)]
+        m2 = addmags(self.stars['{}_mag_B'.format(band)],
+                     self.stars['{}_mag_C'.format(band)])
+        return m2-m1
+
     @property
     def singles(self):
         return self.stars.query('mass_B==0 and mass_C==0')
