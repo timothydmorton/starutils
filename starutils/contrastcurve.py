@@ -15,8 +15,9 @@ from .constraints import FunctionLowerLimit
 class ContrastCurve(object):
     def __init__(self,rs,dmags,band,mag=None,name=None):
         """band is self-explanatory; 'mag' is mag of the primary in 'band' """
-        if band=='K' or band=="K'":
-            band = 'Ks'
+        #if band=='K' or band=="K'":
+        #    band = 'Ks'
+
         rs = np.atleast_1d(rs)
         dmags = np.atleast_1d(dmags)
         self.rs = rs

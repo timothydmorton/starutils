@@ -24,7 +24,8 @@ from hashutils import hashcombine, hashdict, hashdf
 
 from .constraints import Constraint,UpperLimit,LowerLimit,JointConstraintOr
 from .constraints import ConstraintDict,MeasurementConstraint,RangeConstraint
-from .constraints import ContrastCurveConstraint,VelocityContrastCurveConstraint
+from .contrastcurve import ContrastCurveConstraint,VelocityContrastCurveConstraint 
+from .contrastcurve import ContrastCurveFromFile
 
 from .utils import randpos_in_circle, draw_raghavan_periods, draw_msc_periods, draw_eccs
 from .utils import flat_massratio, mult_masses
@@ -1424,6 +1425,19 @@ class BGStarPopulation(StarPopulation):
             value = value*u.arcsec
         self.stars['Rsky'] *= (value/self._maxrad).decompose()
         self._maxrad = value
+
+        #look for contrast curve constraints & re-apply them
+        cc_names = []
+        cc_list = []
+        for k,c in self.constraints.items():
+            if isinstance(c, ContrastCurveConstraint):
+                cc_names.append(k)
+                cc_list.append(c.cc)
+
+        for name,cc in zip(cc_names, cc_list):
+            self.remove_constraint(name)
+            self.apply_cc(cc)
+            logging.warning('maxrad changed; {} contrast curve re-applied'.format(cc.name))
         
     def dmag(self,band):
         if self.mags is None:
