@@ -84,24 +84,3 @@ class FunctionUpperLimit(Constraint):
         Constraint.__init__(self,ys < fn(xs),name=name,
                             xs=xs,ys=ys,fn=fn,**kwargs)
     
-class ContrastCurveConstraint(FunctionLowerLimit):
-    def __init__(self,rs,dmags,cc,name='CC',**kwargs):
-        self.rs = rs
-        self.dmags = dmags
-        self.cc = cc
-        FunctionLowerLimit.__init__(self,rs,dmags,cc,name=name,**kwargs)
-        
-    def __str__(self):
-        return '%s contrast curve' % self.name
-
-    def update_rs(self,rs):
-        self.rs = rs
-        FunctionLowerLimit.__init__(self,rs,self.dmags,self.cc,name=self.name)
-        logging.info('%s updated with new rsky values.' % self.name)
-
-class VelocityContrastCurveConstraint(FunctionLowerLimit):
-    def __init__(self,vels,dmags,vcc,name='VCC',**kwargs):
-        self.vels = vels
-        self.dmags = dmags
-        self.vcc = vcc
-        FunctionLowerLimit.__init__(self,vels,dmags,vcc,name=name,**kwargs)
