@@ -130,7 +130,7 @@ class StarPopulation(object):
         #apply constraints,  initializing the following attributes:
         # self.distok, self.countok, self.selected, self.selectfrac
         
-        self._apply_all_constraints()
+        #self._apply_all_constraints()
 
     @property
     def Rsky(self):
@@ -175,7 +175,7 @@ class StarPopulation(object):
         #apply constraints,  initializing the following attributes:
         # self.distok, self.countok, self.selected, self.selectfrac
         
-        self._apply_all_constraints()
+        #self._apply_all_constraints()
 
     def __getitem__(self,prop):
         return self.selected[prop]
@@ -257,6 +257,32 @@ class StarPopulation(object):
             self.selected = self.stars[self.distok]
             self.selectfrac = self.countok.sum()/n
 
+
+    @property
+    def distok(self):
+        ok = np.ones(len(self.stars)).astype(bool)
+        for name in self.constraints:
+            c = self.constraints[name]
+            if c.name not in self.distribution_skip:
+                ok &= c.ok
+        return ok
+
+    @property
+    def countok(self):
+        ok = np.ones(len(self.stars)).astype(bool)
+        for name in self.constraints:
+            c = self.constraints[name]
+            if c.name not in self.selectfrac_skip:
+                ok &= c.ok
+        return ok
+
+    @property
+    def selected(self):
+        return self.stars[self.distok]
+
+    @property
+    def selectfrac(self):
+        return self.countok.sum()/len(self.stars)
 
     def prophist2d(self,propx,propy, mask=None,
                    logx=False,logy=False,inds=None,
@@ -485,7 +511,7 @@ class StarPopulation(object):
         if distribution_skip:
             self.distribution_skip.append(constraint.name)
 
-        self._apply_all_constraints()
+        #self._apply_all_constraints()
 
     def replace_constraint(self,name,selectfrac_skip=False,distribution_skip=False):
         """Re-apply constraint that had been removed
@@ -508,7 +534,7 @@ class StarPopulation(object):
                 self.distribution_skip.remove(name)
             if name in self.selectfrac_skip:
                 self.selectfrac_skip.remove(name)
-            self._apply_all_constraints()
+            #self._apply_all_constraints()
         else:
             logging.warning('Constraint {} does not exist.'.format(name))
 
@@ -593,7 +619,7 @@ class StarPopulation(object):
         self.apply_constraint(UpperLimit(self.Rsky,maxrad,
                                          name='Max Rsky'),
                               overwrite=True)
-        self._apply_all_constraints()
+        #self._apply_all_constraints()
         
 
     @property
@@ -691,7 +717,7 @@ class StarPopulation(object):
             self.apply_constraint(c,selectfrac_skip=sel_skip,
                                   distribution_skip=dist_skip)
 
-        self._apply_all_constraints()
+        #self._apply_all_constraints()
 
         return self
 
@@ -1479,7 +1505,7 @@ class BGStarPopulation(StarPopulation):
         for name,cc in zip(cc_names, cc_list):
             self.remove_constraint(name)
             self.apply_cc(cc)
-            logging.warning('maxrad changed; {} contrast curve re-applied'.format(cc.name))
+            logging.warning('maxrad changed for {} population; {} contrast curve re-applied'.format(self.name, cc.name))
         
     def dmag(self,band):
         if self.mags is None:
