@@ -498,38 +498,75 @@ class StarPopulation(object):
                        loc='lower left',prop={'size':10})
         plt.title(title)
 
+    @property
+    def constraints(self):
+        try:
+            return self._constraints
+        except AttributeError:
+            self._constraints = ConstraintDict()
+            return self._constraints
+
+    @constraints.setter
+    def constraints(self, value):
+        self._constraints = value
+
+    @property
+    def hidden_constraints(self):
+        try:
+            return self._hidden_constraints
+        except AttributeError:
+            self._hidden_constraints = ConstraintDict()
+            return self._hidden_constraints
+
+    @hidden_constraints.setter
+    def hidden_constraints(self, value):
+        self._hidden_constraints = value
+
     def apply_constraint(self,constraint,selectfrac_skip=False,
                          distribution_skip=False,overwrite=False):
         """Apply a constraint to the population
         """
-        if constraint.name in self.constraints and not overwrite:
+        constraints = self.constraints
+        if constraint.name in constraints and not overwrite:
             logging.warning('constraint already applied: {}'.format(constraint.name))
             return
-        self.constraints[constraint.name] = constraint
+        constraints[constraint.name] = constraint
         if selectfrac_skip:
             self.selectfrac_skip.append(constraint.name)
         if distribution_skip:
             self.distribution_skip.append(constraint.name)
+
+        #forward-looking for EclipsePopulation
+        if hasattr(self, '_make_kde'):
+            self._make_kde()
+
+        self.constraints = constraints
 
         #self._apply_all_constraints()
 
     def replace_constraint(self,name,selectfrac_skip=False,distribution_skip=False):
         """Re-apply constraint that had been removed
         """
-        if name in self.hidden_constraints:
-            c = self.hidden_constraints[name]
+        hidden_constraints = self.hidden_constraints
+        if name in hidden_constraints:
+            c = hidden_constraints[name]
             self.apply_constraint(c,selectfrac_skip=selectfrac_skip,
                                   distribution_skip=distribution_skip)
-            del self.hidden_constraints[name]
+            del hidden_constraints[name]
         else:
             logging.warning('Constraint {} not available for replacement.'.format(name))
+
+        self.hidden_constraints = hidden_constraints
 
     def remove_constraint(self,name):
         """Remove a constraint (make it "hidden")
         """
-        if name in self.constraints:
-            self.hidden_constraints[name] = self.constraints[name]
-            del self.constraints[name]
+        constraints = self.constraints
+        hidden_constraints = self.hidden_constraints
+
+        if name in constraints:
+            hidden_constraints[name] = constraints[name]
+            del constraints[name]
             if name in self.distribution_skip:
                 self.distribution_skip.remove(name)
             if name in self.selectfrac_skip:
@@ -537,6 +574,10 @@ class StarPopulation(object):
             #self._apply_all_constraints()
         else:
             logging.warning('Constraint {} does not exist.'.format(name))
+            
+        self.constraints = constraints
+        self.hidden_constraints = hidden_constraints
+
 
     def constrain_property(self,prop,lo=-np.inf,hi=np.inf,
                            measurement=None,thresh=3,
