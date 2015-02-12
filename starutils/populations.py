@@ -1016,11 +1016,28 @@ class TriplePopulation(StarPopulation):
         StarPopulation.__init__(self, stars=stars, orbpop=orbpop, **kwargs)
 
     def dmag(self, band):
+        """Return difference magnitude between fainter and brighter components.
+        """
         m1 = self.stars['{}_mag_A'.format(band)]
         m2 = addmags(self.stars['{}_mag_B'.format(band)],
                      self.stars['{}_mag_C'.format(band)])
-        return m2-m1
+        return np.abs(m2-m1)
 
+    def A_brighter(self, band='g'):
+        mA = self.stars['{}_mag_A'.format(band)]
+        mBC = addmags(self.stars['{}_mag_B'.format(band)],
+                     self.stars['{}_mag_C'.format(band)])
+        return mA < mBC
+        
+    def BC_brighter(self, band='g'):
+        return ~self.A_brighter(band=band)
+
+    def dRV(self, dt, band='g'):
+        """Returns dRV of star A, if A is brighter than B+C, or of star B if B+C is brighter
+        """
+        return (self.orbpop.dRV_1(dt)*self.A_brighter(band) + 
+                self.orbpop.dRV_2(dt)*self.BC_brighter(band))
+        
     @property
     def singles(self):
         return self.stars.query('mass_B==0 and mass_C==0')
@@ -1058,11 +1075,13 @@ class MultipleStarPopulation(TriplePopulation):
                  f_binary=0.4, f_triple=0.12,
                  qmin=0.1, minmass=0.11,
                  n=1e4, ichrone=DARTMOUTH,
-                 multmass_fn=mult_masses,
+                 multmass_fn=mult_masses, 
+                 period=None,
                  period_long_fn=draw_raghavan_periods,
                  period_short_fn=draw_msc_periods,
                  period_short=None, period_long=None,
                  ecc_fn=draw_eccs, 
+                 ecc_kws=None,
                  bands=BANDS,
                  orbpop=None, stars=None,
                  **kwargs):
