@@ -122,10 +122,10 @@ class StarPopulation(object):
                 self.stars['distmod'] = distancemodulus(self.stars['distance'])
 
         #initialize empty constraint list
-        self.constraints = ConstraintDict()
-        self.hidden_constraints = ConstraintDict()
-        self.selectfrac_skip = []
-        self.distribution_skip = []
+        #self.constraints = ConstraintDict()
+        #self.hidden_constraints = ConstraintDict()
+        #self.selectfrac_skip = []
+        #self.distribution_skip = []
 
         #apply constraints,  initializing the following attributes:
         # self.distok, self.countok, self.selected, self.selectfrac
@@ -499,6 +499,30 @@ class StarPopulation(object):
         plt.title(title)
 
     @property
+    def selectfrac_skip(self):
+        try:
+            return self._selectfrac_skip
+        except AttributeError:
+            self._selectfrac_skip = []
+            return self._selectfrac_skip
+
+    @selectfrac_skip.setter
+    def selectfrac_skip(self, value):
+        self._selectfrac_skip = value
+
+    @property
+    def distribution_skip(self):
+        try:
+            return self._distribution_skip
+        except AttributeError:
+            self._distribution_skip = []
+            return self._distribution_skip
+
+    @distribution_skip.setter
+    def distribution_skip(self, value):
+        self._distribution_skip = value
+
+    @property
     def constraints(self):
         try:
             return self._constraints
@@ -526,21 +550,27 @@ class StarPopulation(object):
                          distribution_skip=False,overwrite=False):
         """Apply a constraint to the population
         """
+        #grab properties
         constraints = self.constraints
+        my_selectfrac_skip = self.selectfrac_skip
+        my_distribution_skip = self.distribution_skip
+
         if constraint.name in constraints and not overwrite:
             logging.warning('constraint already applied: {}'.format(constraint.name))
             return
         constraints[constraint.name] = constraint
         if selectfrac_skip:
-            self.selectfrac_skip.append(constraint.name)
+            my_selectfrac_skip.append(constraint.name)
         if distribution_skip:
-            self.distribution_skip.append(constraint.name)
+            my_distribution_skip.append(constraint.name)
 
         #forward-looking for EclipsePopulation
         if hasattr(self, '_make_kde'):
             self._make_kde()
 
         self.constraints = constraints
+        self.selectfrac_skip = my_selectfrac_skip
+        self.distribution_skip = my_distribution_skip
 
         #self._apply_all_constraints()
 
@@ -563,21 +593,24 @@ class StarPopulation(object):
         """
         constraints = self.constraints
         hidden_constraints = self.hidden_constraints
+        my_distribution_skip = self.distribution_skip
+        my_selectfrac_skip = self.selectfrac_skip
 
         if name in constraints:
             hidden_constraints[name] = constraints[name]
             del constraints[name]
             if name in self.distribution_skip:
-                self.distribution_skip.remove(name)
+                my_distribution_skip.remove(name)
             if name in self.selectfrac_skip:
-                self.selectfrac_skip.remove(name)
+                my_selectfrac_skip.remove(name)
             #self._apply_all_constraints()
         else:
             logging.warning('Constraint {} does not exist.'.format(name))
             
         self.constraints = constraints
         self.hidden_constraints = hidden_constraints
-
+        self.selectfrac_skip = my_selectfrac_skip
+        self.distribution_skip = my_distribution_skip
 
     def constrain_property(self,prop,lo=-np.inf,hi=np.inf,
                            measurement=None,thresh=3,
