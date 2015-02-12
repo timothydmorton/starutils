@@ -573,7 +573,7 @@ class StarPopulation(object):
                                   selectfrac_skip=selectfrac_skip,
                                   distribution_skip=distribution_skip)
 
-    def apply_trend_constraint(self,limit,dt,**kwargs):
+    def apply_trend_constraint(self,limit,dt, distribution_skip=True, **kwargs):
         """Only works if object has dRV method and plong attribute; limit in km/s
 
         limit : ``Quantity``
@@ -587,25 +587,28 @@ class StarPopulation(object):
         c2 = LowerLimit(self.Plong, dt*4)
 
         self.apply_constraint(JointConstraintOr(c1,c2,name='RV monitoring',
-                                                Ps=self.Plong,dRVs=dRVs),**kwargs)
+                                                Ps=self.Plong,dRVs=dRVs),
+                              distribution_skip=distribution_skip, **kwargs)
 
-    def apply_cc(self,cc,**kwargs):
+    def apply_cc(self, cc, distribution_skip=True,
+                 **kwargs):
         """Only works if object has Rsky, dmag attributes
         """
         rs = self.Rsky.to('arcsec').value
         dmags = self.dmag(cc.band)
         self.apply_constraint(ContrastCurveConstraint(rs,dmags,cc,name=cc.name),
-                              **kwargs)
+                              distribution_skip=distribution_skip, **kwargs)
 
-    def apply_vcc(self,vcc,**kwargs):
+    def apply_vcc(self, vcc, distribution_skip=True,
+                  **kwargs):
         """only works if has dmag and RV attributes"""
         rvs = self.RV.value
         dmags = self.dmag(vcc.band)
         self.apply_constraint(VelocityContrastCurveConstraint(rvs,dmags,vcc,
                                                               name='secondary spectrum'),
-                              **kwargs)
+                              distribution_skip=distribution_skip, **kwargs)
         
-    def set_maxrad(self,maxrad):
+    def set_maxrad(self,maxrad, distribution_skip=True):
         """Adds a constraint that rejects everything with Rsky > maxrad
 
         Requires Rsky attribute, which should always have units.
@@ -618,7 +621,8 @@ class StarPopulation(object):
         self.maxrad = maxrad
         self.apply_constraint(UpperLimit(self.Rsky,maxrad,
                                          name='Max Rsky'),
-                              overwrite=True)
+                              overwrite=True, 
+                              distribution_skip=distribution_skip)
         #self._apply_all_constraints()
         
 
