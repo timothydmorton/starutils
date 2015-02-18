@@ -167,10 +167,10 @@ class StarPopulation(object):
             self.orbpop = self.orbpop + other.orbpop
 
         #Clear all constraints that might exist
-        self.constraints = ConstraintDict()
-        self.hidden_constraints = ConstraintDict()
-        self.selectfrac_skip = []
-        self.distribution_skip = []
+        #self.constraints = ConstraintDict()
+        #self.hidden_constraints = ConstraintDict()
+        #self.selectfrac_skip = []
+        #self.distribution_skip = []
 
         #apply constraints,  initializing the following attributes:
         # self.distok, self.countok, self.selected, self.selectfrac
@@ -723,10 +723,15 @@ class StarPopulation(object):
         the appropriate properties to reconstruct the object.
         """
         if os.path.exists(filename):
-            if overwrite:
-                os.remove(filename)
-            elif not append:
-                raise IOError('{} exists.  Set either overwrite or append option.'.format(filename))
+            store = pd.HDFStore(filename)
+            if path in store:
+                store.close()
+                if overwrite:
+                    os.remove(filename)
+                elif not append:
+                    raise IOError('{} in {} exists.  Set either overwrite or append option.'.format(path,filename))
+            else:
+                store.close()
 
         if properties is None:
             properties = {}
@@ -1639,9 +1644,9 @@ class BGStarPopulation_TRILEGAL(BGStarPopulation):
                 h5filename = filename
                 basefilename = m.group(1)
 
-            try:
+            if os.path.exists(h5filename)
                 stars = pd.read_hdf(h5filename,'df', autoclose=True)
-            except:
+            else:
                 if ra is None or dec is None:
                     raise ValueError('Must provide ra,dec if simulation file does not already exist.')
                 get_trilegal(basefilename,ra,dec,**kwargs)
