@@ -1644,9 +1644,13 @@ class BGStarPopulation_TRILEGAL(BGStarPopulation):
                 h5filename = filename
                 basefilename = m.group(1)
 
-            if os.path.exists(h5filename)
+            logging.debug(h5filename)
+
+            if os.path.exists(h5filename):
+                logging.debug('file exists')
                 stars = pd.read_hdf(h5filename,'df', autoclose=True)
             else:
+                logging.debug('file does not exist')
                 if ra is None or dec is None:
                     raise ValueError('Must provide ra,dec if simulation file does not already exist.')
                 get_trilegal(basefilename,ra,dec,**kwargs)

@@ -23,6 +23,10 @@ def get_trilegal(filename,ra,dec,folder='.',
     except UnitsError:
         c = SkyCoord(ra,dec,unit='deg')
     l,b = (c.galactic.l.value,c.galactic.b.value)
+
+    if os.path.isabs(filename):
+        folder = ''
+
     if not re.search('\.dat$',filename):
         outfile = '{}/{}.dat'.format(folder,filename)
     else:
