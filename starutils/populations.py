@@ -1549,7 +1549,8 @@ class Spectroscopic_MultipleStarPopulation(MultipleStarPopulation):
 
         if filename is not None:
             self.load_hdf(filename, path=path)
-        elif Teff is not None and logg is not None and feh is not None:
+        elif (Teff is not None and logg is not None and feh is not None)\
+                or (starmodel is not None):
             #make and fit stellar model
             if self.starmodel is None:
                 logging.info('Fitting stellar model...')
