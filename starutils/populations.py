@@ -18,6 +18,8 @@ from orbitutils import TripleOrbitPopulation, TripleOrbitPopulation_FromH5
 from orbitutils import TripleOrbitPopulation_FromDF
 from plotutils import setfig,plot2dhist
 
+from isochrones.starmodel import StarModel
+
 from simpledist import distributions as dists
 
 from hashutils import hashcombine, hashdict, hashdf
@@ -1250,14 +1252,14 @@ class MultipleStarPopulation(TriplePopulation):
         self.ecc_fn = ecc_fn
 
         if stars is None and mA is not None:
-            self.generate(mA, age=age, feh=feh, n=n, ichrone=ichrone,
+            self.generate(mA=mA, age=age, feh=feh, n=n, ichrone=ichrone,
                           orbpop=orbpop, bands=bands, period_long=period_long,
-                          period_short=period_short,**kwargs)
+                          period_short=period_short, **kwargs)
         else:
             TriplePopulation.__init__(self, stars=stars, orbpop=orbpop, **kwargs)
 
 
-    def generate(self, mA, age=9.6, feh=0.0, n=1e5, ichrone=DARTMOUTH,
+    def generate(self, mA=1, age=9.6, feh=0.0, n=1e5, ichrone=DARTMOUTH,
                  orbpop=None, bands=None, **kwargs):
         n = int(n)
         #star with m1 orbits (m2+m3).  So mA (most massive)
@@ -1530,11 +1532,60 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
 
 
 class Spectroscopic_MultipleStarPopulation(MultipleStarPopulation):
-    def __init__(self, Teff, logg, feh):
-        pass
+    def __init__(self, filename=None, Teff=None, logg=None, feh=None, 
+                 starmodel=None,
+                 n=2e4, stars=None, path='', ichrone=DARTMOUTH, 
+                 mcmc_kws=None, **kwargs):
+        """MultipleStarPopulation based on spectroscopically confirmed primary star
+
+        kwargs passed to MultipleStarPopulation
+        """
+        
+        self.Teff = Teff
+        self.logg = logg
+        self.feh = feh
+        self.starmodel = starmodel
+
+
+        if filename is not None:
+            self.load_hdf(filename, path=path)
+        elif Teff is not None and logg is not None and feh is not None:
+            #make and fit stellar model
+            if self.starmodel is None:
+                logging.info('Fitting stellar model...')
+                self.starmodel = StarModel(ichrone, Teff=Teff, logg=logg, feh=feh)
+                if mcmc_kws is None:
+                    mcmc_kws = {}
+                self.starmodel.fit_mcmc(**mcmc_kws)
+
+            samples = self.starmodel.random_samples(n)
+            super(type(self),self).__init__(mA=samples['mass'],
+                                            age=samples['age'],
+                                            feh=samples['feh'],
+                                            **kwargs)
+        else:
+            pass
+
+    @property
+    def _properties(self):
+        return ['Teff','logg',
+                'feh'] + super(type(self),self)._properties
+
+    def save_hdf(self, filename, path='', **kwargs):
+        super(type(self),self).save_hdf(filename, path=path,
+                                        **kwargs)
+
+        self.starmodel.save_hdf(filename, path=path, **kwargs)
+        
+        
+    def load_hdf(self, filename, path=''):
+        pop = super(type(self),self).load_hdf(filename, path=path)
+        pop.starmodel = StarModel.load_hdf(filename, path=path)
+        return pop
 
 class BGStarPopulation(StarPopulation):
-    def __init__(self,stars=None,mags=None,maxrad=1800,density=None,name=''):
+    def __init__(self,stars=None,mags=None,maxrad=1800,density=None,
+                 name='', **kwargs):
         """Background star population
 
         Parameters
@@ -1561,7 +1612,7 @@ class BGStarPopulation(StarPopulation):
             else:
                 self._maxrad = maxrad
 
-        StarPopulation.__init__(self,stars=stars,name=name)
+        StarPopulation.__init__(self,stars=stars,name=name, **kwargs)
 
         if stars is not None:
             self.stars['Rsky'] = randpos_in_circle(len(stars),maxrad,return_rad=True)
