@@ -323,11 +323,11 @@ class StarPopulation(object):
                 inds = self.stars.index
 
         if selected:
-            xvals = self.selected[propx].iloc[inds]
-            yvals = self.selected[propy].iloc[inds]
+            xvals = self.selected[propx].values#.iloc[inds]
+            yvals = self.selected[propy].values#.iloc[inds]
         else:
-            xvals = self.stars[propx].iloc[inds]
-            yvals = self.stars[propy].iloc[inds]
+            xvals = self.stars[propx].iloc[inds].values
+            yvals = self.stars[propy].iloc[inds].values
 
         #forward-hack for EclipsePopulations...
         #TODO: reorganize.
@@ -365,9 +365,9 @@ class StarPopulation(object):
                 inds = self.stars.index
 
         if selected:
-            vals = self.selected[prop].iloc[inds]
+            vals = self.selected[prop].values#.iloc[inds] #invalidates mask?
         else:
-            vals = self.stars[prop].iloc[inds]
+            vals = self.stars[prop].iloc[inds].values
 
         if prop=='depth' and hasattr(self,'depth'):
             vals *= self.dilution_factor[inds]
@@ -1529,6 +1529,10 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
             super(ColormatchMultipleStarPopulation, self)._properties
 
 
+class Spectroscopic_MultipleStarPopulation(MultipleStarPopulation):
+    def __init__(self, Teff, logg, feh):
+        pass
+
 class BGStarPopulation(StarPopulation):
     def __init__(self,stars=None,mags=None,maxrad=1800,density=None,name=''):
         """Background star population
@@ -1644,13 +1648,9 @@ class BGStarPopulation_TRILEGAL(BGStarPopulation):
                 h5filename = filename
                 basefilename = m.group(1)
 
-            logging.debug(h5filename)
-
             if os.path.exists(h5filename):
-                logging.debug('file exists')
                 stars = pd.read_hdf(h5filename,'df', autoclose=True)
             else:
-                logging.debug('file does not exist')
                 if ra is None or dec is None:
                     raise ValueError('Must provide ra,dec if simulation file does not already exist.')
                 get_trilegal(basefilename,ra,dec,**kwargs)
