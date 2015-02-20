@@ -1556,11 +1556,14 @@ class Spectroscopic_MultipleStarPopulation(MultipleStarPopulation):
                 or (starmodel is not None):
             #make and fit stellar model
             if self.starmodel is None:
-                logging.info('Fitting stellar model...')
+                logging.info('Fitting stellar model (Teff={}, logg={}, feh={})...'.format(Teff,
+                                                                                          logg,
+                                                                                          feh))
                 self.starmodel = StarModel(ichrone, Teff=Teff, logg=logg, feh=feh)
                 if mcmc_kws is None:
                     mcmc_kws = {}
                 self.starmodel.fit_mcmc(**mcmc_kws)
+                logging.info('Done.')
 
             samples = self.starmodel.random_samples(n)
             super(type(self),self).__init__(mA=samples['mass'],
