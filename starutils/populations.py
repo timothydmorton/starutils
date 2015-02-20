@@ -1711,7 +1711,9 @@ class BGStarPopulation_TRILEGAL(BGStarPopulation):
             else:
                 if ra is None or dec is None:
                     raise ValueError('Must provide ra,dec if simulation file does not already exist.')
+                logging.info('Getting TRILEGAL simulation at {}, {}...'.format(ra,dec))
                 get_trilegal(basefilename,ra,dec,**kwargs)
+                logging.info('Done.')
                 stars = pd.read_hdf(h5filename,'df', autoclose=True)
             store = pd.HDFStore(h5filename)
             self.trilegal_args = store.get_storer('df').attrs.trilegal_args
