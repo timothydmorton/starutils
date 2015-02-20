@@ -314,6 +314,7 @@ class StarPopulation(object):
         kwargs :
             Keyword arguments passed to ``plot2dhist`` function.
         """
+        
         if mask is not None:
             inds = np.where(mask)[0]
         elif inds is None:
@@ -325,18 +326,20 @@ class StarPopulation(object):
                 inds = self.stars.index
 
         if selected:
-            xvals = self.selected[propx].values#.iloc[inds]
-            yvals = self.selected[propy].values#.iloc[inds]
+            xvals = self.selected[propx].iloc[inds].values
+            yvals = self.selected[propy].iloc[inds].values
         else:
-            xvals = self.stars[propx].iloc[inds].values
-            yvals = self.stars[propy].iloc[inds].values
+            if mask is None:
+                mask = np.ones_like(self.stars.index)
+            xvals = self.stars[mask][propx].values
+            yvals = self.stars[mask][propy].values
 
         #forward-hack for EclipsePopulations...
         #TODO: reorganize.
         if propx=='depth' and hasattr(self,'depth'):
-            xvals = self.depth[inds]
+            xvals = self.depth.iloc[inds].values
         if propy=='depth' and hasattr(self,'depth'):
-            yvals = self.depth[inds]
+            yvals = self.depth.iloc[inds].values
         
 
         if logx:
