@@ -1707,6 +1707,7 @@ class BGStarPopulation_TRILEGAL(BGStarPopulation):
                 basefilename = m.group(1)
 
             if os.path.exists(h5filename):
+                logging.info('Loading TRILEGAL simulation from {}'.format(h5filename))
                 stars = pd.read_hdf(h5filename,'df', autoclose=True)
             else:
                 if ra is None or dec is None:
