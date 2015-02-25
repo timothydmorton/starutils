@@ -1499,9 +1499,11 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
                     logging.warning('unrecognized color: {}'.format(c))
 
             stars = pd.concat((stars,pop.stars[cond]))
+
+            efficiency = cond.sum()/n_adapt
             n_adapt = min(int(1.2*(n-len(stars)) * n_adapt//cond.sum()), 3e5)
             n_adapt = max(n_adapt, 100)
-            logging.info('{} systems simulated to match provided colors (target {}).'.format(len(stars),n))
+            logging.info('{} systems simulated to match provided colors (target {}, efficiency={:.3f}).'.format(len(stars),n,efficiency))
             df_long = pd.concat((df_long, pop.orbpop.orbpop_long.dataframe[cond]))
             df_short = pd.concat((df_short, pop.orbpop.orbpop_short.dataframe[cond]))
 
