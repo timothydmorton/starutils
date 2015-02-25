@@ -1501,9 +1501,11 @@ class ColormatchMultipleStarPopulation(MultipleStarPopulation):
             stars = pd.concat((stars,pop.stars[cond]))
 
             efficiency = cond.sum()/n_adapt
+            if efficiency < 0.01:
+                raise PoorColorsError('Generating population with low efficiency ({:.3f}), so aborting.  Consider dropping color constraints.'.format(efficiency))
             n_adapt = min(int(1.2*(n-len(stars)) * n_adapt//cond.sum()), 3e5)
             n_adapt = max(n_adapt, 100)
-            logging.info('{} systems simulated to match provided colors (target {}, efficiency={:.3f}).'.format(len(stars),n,efficiency))
+            logging.info('{} systems simulated to match provided colors (target {}).'.format(len(stars),n))
             df_long = pd.concat((df_long, pop.orbpop.orbpop_long.dataframe[cond]))
             df_short = pd.concat((df_short, pop.orbpop.orbpop_short.dataframe[cond]))
 
@@ -1742,6 +1744,11 @@ class BGStarPopulation_TRILEGAL(BGStarPopulation):
     def _properties(self):
         return ['trilegal_args'] + \
             super(BGStarPopulation_TRILEGAL,self)._properties
+
+############## Exceptions ################
+
+class PoorColorsError(Exception):
+    pass
 
 
 #methods below should be applied to relevant subclasses
