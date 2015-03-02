@@ -27,7 +27,7 @@ def get_AV_infinity(ra,dec,frame='icrs',verbose=False):
         if m:
             AV = float(m.group(1))
     if AV is None:
-        logging.warning('Error accessing NED!')
+        logging.warning('Error accessing NED at {}, {}'.format(ra,dec))
         for line in open(tmpfile):
             logging.warning(line)
         
