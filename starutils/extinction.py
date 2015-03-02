@@ -13,9 +13,9 @@ def get_AV_infinity(ra,dec,frame='icrs',verbose=False):
     if decd > 0: 
         decsign = '%2B'
     else:
-        decsign = ''
+        decsign = '%2D'
     url = 'http://ned.ipac.caltech.edu/cgi-bin/nph-calc?in_csys=Equatorial&in_equinox=J2000.0&obs_epoch=2010&lon='+'%i' % rah + \
-        '%3A'+'%i' % ram + '%3A' + '%05.2f' % ras + '&lat=%s' % decsign + '%i' % decd + '%3A' + '%i' % decm + '%3A' + '%05.2f' % decs + \
+        '%3A'+'%i' % ram + '%3A' + '%05.2f' % ras + '&lat=%s' % decsign + '%i' % abs(decd) + '%3A' + '%i' % abs(decm) + '%3A' + '%05.2f' % abs(decs) + \
         '&pa=0.0&out_csys=Equatorial&out_equinox=J2000.0'
 
     tmpfile = '/tmp/nedsearch%s%s.html' % (ra,dec)
@@ -27,7 +27,7 @@ def get_AV_infinity(ra,dec,frame='icrs',verbose=False):
         if m:
             AV = float(m.group(1))
     if AV is None:
-        logging.warning('Error accessing NED at {}, {}'.format(ra,dec))
+        logging.warning('Error accessing NED, url={}'.format(url))
         for line in open(tmpfile):
             logging.warning(line)
         
